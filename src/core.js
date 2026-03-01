@@ -40,6 +40,7 @@ const DEFAULT_COMMAND_ALLOWLIST = Object.freeze([
   "/new",
   "/compact",
 ]);
+const DEFAULT_ALLOW_FROM_REJECT_MESSAGE = "当前账号未授权，请联系管理员。";
 
 const inboundMessageDedupe = new Map();
 
@@ -176,6 +177,29 @@ function normalizeAccountIdForEnv(accountId) {
   return normalized || "default";
 }
 
+function readAllowFromEnv(envVars, processEnv, accountId = "default") {
+  const normalizedId = normalizeAccountIdForEnv(accountId);
+  const scopedAllowFromKey = normalizedId === "default" ? null : `WECOM_${normalizedId.toUpperCase()}_ALLOW_FROM`;
+  const scoped = parseStringList(
+    scopedAllowFromKey ? envVars?.[scopedAllowFromKey] : undefined,
+    scopedAllowFromKey ? processEnv?.[scopedAllowFromKey] : undefined,
+  );
+  if (scoped.length > 0) return scoped;
+  return parseStringList(envVars?.WECOM_ALLOW_FROM, processEnv?.WECOM_ALLOW_FROM);
+}
+
+function readAllowFromRejectMessageEnv(envVars, processEnv, accountId = "default") {
+  const normalizedId = normalizeAccountIdForEnv(accountId);
+  const scopedRejectMessageKey =
+    normalizedId === "default" ? null : `WECOM_${normalizedId.toUpperCase()}_ALLOW_FROM_REJECT_MESSAGE`;
+  return pickFirstNonEmptyString(
+    scopedRejectMessageKey ? envVars?.[scopedRejectMessageKey] : undefined,
+    scopedRejectMessageKey ? processEnv?.[scopedRejectMessageKey] : undefined,
+    envVars?.WECOM_ALLOW_FROM_REJECT_MESSAGE,
+    processEnv?.WECOM_ALLOW_FROM_REJECT_MESSAGE,
+  );
+}
+
 function readProxyEnv(envVars, processEnv, accountId = "default") {
   const normalizedId = normalizeAccountIdForEnv(accountId);
   const scopedProxyKey = normalizedId === "default" ? null : `WECOM_${normalizedId.toUpperCase()}_PROXY`;
@@ -277,6 +301,25 @@ function uniqueCommandList(values) {
   return Array.from(deduped);
 }
 
+export function normalizeWecomAllowFromEntry(raw) {
+  const trimmed = String(raw ?? "").trim();
+  if (!trimmed) return "";
+  if (trimmed === "*") return "*";
+  return trimmed
+    .replace(/^(wecom|wework):/i, "")
+    .replace(/^user:/i, "")
+    .toLowerCase();
+}
+
+function uniqueAllowFromList(values) {
+  const deduped = new Set();
+  for (const value of values) {
+    const normalized = normalizeWecomAllowFromEntry(value);
+    if (normalized) deduped.add(normalized);
+  }
+  return Array.from(deduped);
+}
+
 export function extractLeadingSlashCommand(text) {
   const normalized = String(text ?? "").trim();
   if (!normalized.startsWith("/")) return "";
@@ -319,6 +362,39 @@ export function resolveWecomCommandPolicyConfig({
     adminUsers,
     rejectMessage,
   };
+}
+
+export function resolveWecomAllowFromPolicyConfig({
+  channelConfig = {},
+  accountConfig = {},
+  envVars = {},
+  processEnv = process.env,
+  accountId = "default",
+} = {}) {
+  const accountAllowFrom = uniqueAllowFromList(parseStringList(accountConfig?.allowFrom));
+  const channelAllowFrom = uniqueAllowFromList(parseStringList(channelConfig?.allowFrom));
+  const envAllowFrom = uniqueAllowFromList(readAllowFromEnv(envVars, processEnv, accountId));
+  const allowFrom = accountAllowFrom.length > 0 ? accountAllowFrom : channelAllowFrom.length > 0 ? channelAllowFrom : envAllowFrom;
+  const rejectMessage = pickFirstNonEmptyString(
+    accountConfig?.allowFromRejectMessage,
+    accountConfig?.rejectUnauthorizedMessage,
+    channelConfig?.allowFromRejectMessage,
+    channelConfig?.rejectUnauthorizedMessage,
+    readAllowFromRejectMessageEnv(envVars, processEnv, accountId),
+    DEFAULT_ALLOW_FROM_REJECT_MESSAGE,
+  );
+  return {
+    allowFrom,
+    rejectMessage,
+  };
+}
+
+export function isWecomSenderAllowed({ senderId, allowFrom = [] } = {}) {
+  const sender = normalizeWecomAllowFromEntry(senderId);
+  if (!sender) return false;
+  const normalizedAllowFrom = uniqueAllowFromList(Array.isArray(allowFrom) ? allowFrom : parseStringList(allowFrom));
+  if (normalizedAllowFrom.length === 0 || normalizedAllowFrom.includes("*")) return true;
+  return normalizedAllowFrom.includes(sender);
 }
 
 export function resolveWecomGroupChatConfig({
@@ -370,7 +446,24 @@ export function shouldTriggerWecomGroupResponse(content, groupChatConfig) {
     Array.isArray(groupChatConfig?.mentionPatterns) && groupChatConfig.mentionPatterns.length > 0
       ? groupChatConfig.mentionPatterns
       : ["@"];
-  return patterns.some((pattern) => text.includes(pattern));
+  return patterns.some((pattern) => {
+    const normalized = String(pattern ?? "").trim();
+    if (!normalized) return false;
+    if (normalized === "@") {
+      // Avoid false positives for email-like "user@domain" content.
+      return /(^|[^A-Za-z0-9._%+-])@[^\s@]+/u.test(text);
+    }
+    const escaped = escapeRegExp(normalized);
+    if (normalized.startsWith("@")) {
+      return new RegExp(`(^|[^A-Za-z0-9._%+-])${escaped}(?=$|\\s|[()\\[\\]{}<>,.!?;:，。！？、；：])`, "u").test(
+        text,
+      );
+    }
+    return new RegExp(
+      `(^|\\s|[()\\[\\]{}<>,.!?;:，。！？、；：])${escaped}(?=$|\\s|[()\\[\\]{}<>,.!?;:，。！？、；：])`,
+      "u",
+    ).test(text);
+  });
 }
 
 function escapeRegExp(value) {
@@ -384,12 +477,19 @@ export function stripWecomGroupMentions(content, mentionPatterns = ["@"]) {
     const pattern = String(rawPattern ?? "").trim();
     if (!pattern) continue;
     if (pattern === "@") {
-      // Remove "@name" mentions at start or after whitespace, avoid matching email addresses.
-      text = text.replace(/(^|\s)@[^\s@]+/g, "$1");
+      // Remove "@name" mentions while keeping email-like local@domain untouched.
+      text = text.replace(/(^|[^A-Za-z0-9._%+-])@[^\s@]+/gu, "$1");
       continue;
     }
     const escaped = escapeRegExp(pattern);
-    text = text.replace(new RegExp(escaped, "g"), " ");
+    if (pattern.startsWith("@")) {
+      text = text.replace(new RegExp(`(^|[^A-Za-z0-9._%+-])${escaped}\\S*`, "gu"), "$1");
+      continue;
+    }
+    text = text.replace(
+      new RegExp(`(^|\\s|[()\\[\\]{}<>,.!?;:，。！？、；：])${escaped}\\S*`, "gu"),
+      "$1",
+    );
   }
   return text.replace(/\s{2,}/g, " ").trim();
 }

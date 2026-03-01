@@ -1,9 +1,9 @@
 import crypto from "node:crypto";
 import { XMLParser } from "fast-xml-parser";
 import { normalizePluginHttpPath } from "openclaw/plugin-sdk";
-import { writeFile, unlink, mkdir, readFile } from "node:fs/promises";
+import { writeFile, unlink, mkdir, readFile, stat, open } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { basename, extname, join } from "node:path";
+import { basename, dirname, extname, isAbsolute, join } from "node:path";
 import { spawn } from "node:child_process";
 import { ProxyAgent } from "undici";
 import {
@@ -18,6 +18,8 @@ import {
   normalizeAudioContentType,
   pickAudioFileExtension,
   extractLeadingSlashCommand,
+  isWecomSenderAllowed,
+  resolveWecomAllowFromPolicyConfig,
   resolveWecomCommandPolicyConfig,
   resolveWecomDebounceConfig,
   resolveWecomGroupChatConfig,
@@ -36,7 +38,7 @@ const xmlParser = new XMLParser({
 
 // 请求体大小限制 (1MB)
 const MAX_REQUEST_BODY_SIZE = 1024 * 1024;
-const PLUGIN_VERSION = "0.4.5";
+const PLUGIN_VERSION = "0.4.7";
 const WECOM_TEMP_DIR_NAME = "openclaw-wechat";
 const WECOM_TEMP_FILE_RETENTION_MS = 30 * 60 * 1000;
 const FFMPEG_PATH_CHECK_CACHE = {
@@ -47,6 +49,9 @@ const COMMAND_PATH_CHECK_CACHE = new Map();
 const WECOM_PROXY_DISPATCHER_CACHE = new Map();
 const INVALID_PROXY_CACHE = new Set();
 const TEXT_MESSAGE_DEBOUNCE_BUFFERS = new Map();
+const ACTIVE_LATE_REPLY_WATCHERS = new Map();
+const DELIVERED_TRANSCRIPT_REPLY_CACHE = new Map();
+const TRANSCRIPT_REPLY_CACHE_TTL_MS = 30 * 60 * 1000;
 
 function readRequestBody(req, maxSize = MAX_REQUEST_BODY_SIZE) {
   return new Promise((resolve, reject) => {
@@ -244,6 +249,136 @@ function withTimeout(promise, timeoutMs, timeoutMessage) {
   ]).finally(() => {
     if (timer) clearTimeout(timer);
   });
+}
+
+function isDispatchTimeoutError(err) {
+  const text = String(err?.message ?? err ?? "").toLowerCase();
+  return text.includes("dispatch timed out after") || text.includes("operation timed out after");
+}
+
+function normalizeAssistantReplyText(text) {
+  if (text == null) return "";
+  return String(text)
+    .replace(/\[\[\s*reply_to(?:_|:|\s*)current\s*\]\]/gi, "")
+    .replace(/\[\[\s*reply_to\s*:\s*current\s*\]\]/gi, "")
+    .trim();
+}
+
+function extractAssistantTextFromTranscriptMessage(message) {
+  if (!message || typeof message !== "object") return "";
+  if (message.role !== "assistant") return "";
+  const stopReason = String(message.stopReason ?? "").trim().toLowerCase();
+  if (stopReason === "error" || stopReason === "aborted") return "";
+
+  const content = message.content;
+  if (typeof content === "string") {
+    return normalizeAssistantReplyText(content);
+  }
+  if (!Array.isArray(content)) return "";
+
+  const chunks = [];
+  for (const block of content) {
+    if (typeof block === "string") {
+      const text = normalizeAssistantReplyText(block);
+      if (text) chunks.push(text);
+      continue;
+    }
+    if (!block || typeof block !== "object") continue;
+    const blockType = String(block.type ?? "").trim().toLowerCase();
+    if (!["text", "output_text", "markdown", "final_text"].includes(blockType)) continue;
+    const text = normalizeAssistantReplyText(block.text);
+    if (text) chunks.push(text);
+  }
+  return normalizeAssistantReplyText(chunks.join("\n").trim());
+}
+
+function pruneDeliveredTranscriptReplyCache(now = Date.now()) {
+  for (const [cacheKey, expiresAt] of DELIVERED_TRANSCRIPT_REPLY_CACHE.entries()) {
+    if (expiresAt <= now) DELIVERED_TRANSCRIPT_REPLY_CACHE.delete(cacheKey);
+  }
+}
+
+function markTranscriptReplyDelivered(sessionId, transcriptMessageId) {
+  const cacheKey = `${String(sessionId ?? "").trim().toLowerCase()}:${String(transcriptMessageId ?? "").trim()}`;
+  if (!cacheKey) return;
+  pruneDeliveredTranscriptReplyCache();
+  DELIVERED_TRANSCRIPT_REPLY_CACHE.set(cacheKey, Date.now() + TRANSCRIPT_REPLY_CACHE_TTL_MS);
+}
+
+function hasTranscriptReplyBeenDelivered(sessionId, transcriptMessageId) {
+  const cacheKey = `${String(sessionId ?? "").trim().toLowerCase()}:${String(transcriptMessageId ?? "").trim()}`;
+  if (!cacheKey) return false;
+  pruneDeliveredTranscriptReplyCache();
+  const expiresAt = DELIVERED_TRANSCRIPT_REPLY_CACHE.get(cacheKey);
+  return typeof expiresAt === "number" && expiresAt > Date.now();
+}
+
+async function resolveSessionTranscriptFilePath({ storePath, sessionKey, sessionId, logger }) {
+  const fallbackPath = join(dirname(storePath), `${sessionId}.jsonl`);
+  try {
+    const raw = await readFile(storePath, "utf8");
+    const store = JSON.parse(raw);
+    if (!store || typeof store !== "object") return fallbackPath;
+    const entry =
+      store?.[sessionKey] ??
+      Object.values(store).find((value) => value?.sessionId === sessionId && typeof value?.sessionFile === "string");
+    const sessionFile = String(entry?.sessionFile ?? "").trim();
+    if (!sessionFile) return fallbackPath;
+    if (isAbsolute(sessionFile)) return sessionFile;
+    return join(dirname(storePath), sessionFile);
+  } catch (err) {
+    logger?.warn?.(
+      `wecom: failed to resolve session transcript path from store (${sessionKey}): ${String(err?.message || err)}`,
+    );
+    return fallbackPath;
+  }
+}
+
+async function readTranscriptAppendedChunk(filePath, offset) {
+  let fileStat;
+  try {
+    fileStat = await stat(filePath);
+  } catch {
+    return { nextOffset: offset, chunk: "" };
+  }
+
+  const fileSize = Number(fileStat.size ?? 0);
+  if (!Number.isFinite(fileSize) || fileSize <= offset) {
+    return { nextOffset: offset, chunk: "" };
+  }
+
+  const readLength = fileSize - offset;
+  const handle = await open(filePath, "r");
+  try {
+    const buffer = Buffer.alloc(readLength);
+    await handle.read(buffer, 0, readLength, offset);
+    return { nextOffset: fileSize, chunk: buffer.toString("utf8") };
+  } finally {
+    await handle.close();
+  }
+}
+
+function parseLateAssistantReplyFromTranscriptLine(line, minTimestamp = 0) {
+  if (!line?.trim()) return null;
+  try {
+    const entry = JSON.parse(line);
+    if (entry?.type !== "message") return null;
+    const message = entry?.message;
+    const text = extractAssistantTextFromTranscriptMessage(message);
+    if (!text || isAgentFailureText(text)) return null;
+    const timestamp = Number(message?.timestamp ?? Date.parse(String(entry?.timestamp ?? "")) ?? 0);
+    if (minTimestamp > 0 && Number.isFinite(timestamp) && timestamp > 0 && timestamp + 1000 < minTimestamp) {
+      return null;
+    }
+    const transcriptMessageId = String(entry?.id ?? "").trim() || `${timestamp || Date.now()}-${text.slice(0, 32)}`;
+    return {
+      transcriptMessageId,
+      text,
+      timestamp: Number.isFinite(timestamp) ? timestamp : Date.now(),
+    };
+  } catch {
+    return null;
+  }
 }
 
 function isWecomApiUrl(url) {
@@ -1137,6 +1272,10 @@ function normalizeAccountConfig(raw, accountId) {
   const callbackAesKey = String(raw.callbackAesKey ?? "").trim();
   const webhookPath = String(raw.webhookPath ?? "/wecom/callback").trim() || "/wecom/callback";
   const outboundProxy = String(raw.outboundProxy ?? raw.proxyUrl ?? raw.proxy ?? "").trim();
+  const allowFrom = raw.allowFrom;
+  const allowFromRejectMessage = String(
+    raw.allowFromRejectMessage ?? raw.rejectUnauthorizedMessage ?? "",
+  ).trim();
 
   if (!corpId || !corpSecret || !agentId) {
     return null;
@@ -1151,6 +1290,8 @@ function normalizeAccountConfig(raw, accountId) {
     callbackAesKey,
     webhookPath,
     outboundProxy: outboundProxy || undefined,
+    allowFrom,
+    allowFromRejectMessage: allowFromRejectMessage || undefined,
     enabled: raw.enabled !== false,
   };
 }
@@ -1177,6 +1318,8 @@ function readAccountConfigFromEnv({ envVars, accountId }) {
         ? requireEnv("HTTPS_PROXY")
         : envVars?.WECOM_PROXY ?? requireEnv("WECOM_PROXY") ?? requireEnv("HTTPS_PROXY"));
   const outboundProxy = String(outboundProxyRaw ?? "").trim();
+  const allowFrom = readVar("ALLOW_FROM");
+  const allowFromRejectMessage = String(readVar("ALLOW_FROM_REJECT_MESSAGE") ?? "").trim();
   const enabledRaw = String(readVar("ENABLED") ?? "").trim().toLowerCase();
   const enabled = !["0", "false", "off", "no"].includes(enabledRaw);
 
@@ -1191,6 +1334,8 @@ function readAccountConfigFromEnv({ envVars, accountId }) {
     callbackAesKey,
     webhookPath,
     outboundProxy: outboundProxy || undefined,
+    allowFrom,
+    allowFromRejectMessage: allowFromRejectMessage || undefined,
     enabled,
   };
 }
@@ -1306,6 +1451,15 @@ function resolveWecomPolicyInputs(api) {
 
 function resolveWecomCommandPolicy(api) {
   return resolveWecomCommandPolicyConfig(resolveWecomPolicyInputs(api));
+}
+
+function resolveWecomAllowFromPolicy(api, accountId, accountConfig = {}) {
+  const inputs = resolveWecomPolicyInputs(api);
+  return resolveWecomAllowFromPolicyConfig({
+    ...inputs,
+    accountId: normalizeAccountId(accountId ?? "default"),
+    accountConfig: accountConfig ?? {},
+  });
 }
 
 function resolveWecomGroupChatPolicy(api) {
@@ -1706,6 +1860,7 @@ async function handleStatusCommand({ api, fromUser, corpId, corpSecret, agentId,
   const accountIds = listWecomAccountIds(api);
   const voiceConfig = resolveWecomVoiceTranscriptionConfig(api);
   const commandPolicy = resolveWecomCommandPolicy(api);
+  const allowFromPolicy = resolveWecomAllowFromPolicy(api, config?.accountId, config);
   const groupPolicy = resolveWecomGroupChatPolicy(api);
   const debouncePolicy = resolveWecomTextDebouncePolicy(api);
   const proxyEnabled = Boolean(config?.outboundProxy);
@@ -1715,6 +1870,10 @@ async function handleStatusCommand({ api, fromUser, corpId, corpSecret, agentId,
   const commandPolicyLine = commandPolicy.enabled
     ? `✅ 指令白名单已启用（${commandPolicy.allowlist.length} 条，管理员 ${commandPolicy.adminUsers.length} 人）`
     : "ℹ️ 指令白名单未启用";
+  const allowFromPolicyLine =
+    allowFromPolicy.allowFrom.length === 0 || allowFromPolicy.allowFrom.includes("*")
+      ? "ℹ️ 发送者授权：未限制（allowFrom 未配置）"
+      : `✅ 发送者授权：已限制 ${allowFromPolicy.allowFrom.length} 个用户`;
   const groupPolicyLine = groupPolicy.enabled
     ? groupPolicy.requireMention
       ? "✅ 群聊触发：仅 @ 命中后处理"
@@ -1741,6 +1900,7 @@ async function handleStatusCommand({ api, fromUser, corpId, corpSecret, agentId,
 ✅ API 限流
 ✅ 多账户支持
 ${commandPolicyLine}
+${allowFromPolicyLine}
 ${groupPolicyLine}
 ${debouncePolicyLine}
 ${proxyEnabled ? "✅ WeCom 出站代理已启用" : "ℹ️ WeCom 出站代理未启用"}
@@ -1799,6 +1959,7 @@ async function processInboundMessage({
     // 一用户一会话：群聊和私聊统一归并到 wecom:<userid>
     const sessionId = buildWecomSessionId(fromUser);
     const fromAddress = `wecom:${fromUser}`;
+    const normalizedFromUser = String(fromUser ?? "").trim().toLowerCase();
     const originalContent = content || "";
     let commandBody = originalContent;
     api.logger.info?.(`wecom: processing ${msgType} message for session ${sessionId}${isGroupChat ? " (group)" : ""}`);
@@ -1823,6 +1984,31 @@ async function processInboundMessage({
       }
     }
 
+    const commandPolicy = resolveWecomCommandPolicy(api);
+    const isAdminUser = commandPolicy.adminUsers.includes(normalizedFromUser);
+    const allowFromPolicy = resolveWecomAllowFromPolicy(api, config.accountId || accountId || "default", config);
+    const senderAllowed = isAdminUser || isWecomSenderAllowed({
+      senderId: normalizedFromUser,
+      allowFrom: allowFromPolicy.allowFrom,
+    });
+    if (!senderAllowed) {
+      api.logger.warn?.(
+        `wecom: sender blocked by allowFrom account=${config.accountId || "default"} user=${normalizedFromUser}`,
+      );
+      if (allowFromPolicy.rejectMessage) {
+        await sendWecomText({
+          corpId,
+          corpSecret,
+          agentId,
+          toUser: fromUser,
+          text: allowFromPolicy.rejectMessage,
+          logger: api.logger,
+          proxyUrl,
+        });
+      }
+      return;
+    }
+
     // 命令检测（仅对文本消息）
     if (msgType === "text") {
       let commandKey = extractLeadingSlashCommand(commandBody);
@@ -1832,8 +2018,6 @@ async function processInboundMessage({
         commandKey = "/reset";
       }
       if (commandKey) {
-        const commandPolicy = resolveWecomCommandPolicy(api);
-        const isAdminUser = commandPolicy.adminUsers.includes(String(fromUser ?? "").trim().toLowerCase());
         const commandAllowed =
           commandPolicy.allowlist.includes(commandKey) ||
           (commandKey === "/reset" && commandPolicy.allowlist.includes("/clear"));
@@ -2145,7 +2329,9 @@ async function processInboundMessage({
     let hasDeliveredReply = false;
     let hasSentProgressNotice = false;
     let blockTextFallback = "";
+    let suppressLateDispatcherDeliveries = false;
     let progressNoticeTimer = null;
+    let lateReplyWatcherPromise = null;
     const replyTimeoutMs = Math.max(
       15000,
       asNumber(cfg?.env?.vars?.WECOM_REPLY_TIMEOUT_MS ?? requireEnv("WECOM_REPLY_TIMEOUT_MS"), 90000),
@@ -2153,6 +2339,23 @@ async function processInboundMessage({
     const progressNoticeDelayMs = Math.max(
       0,
       asNumber(cfg?.env?.vars?.WECOM_PROGRESS_NOTICE_MS ?? requireEnv("WECOM_PROGRESS_NOTICE_MS"), 8000),
+    );
+    const lateReplyWatchMs = Math.max(
+      30000,
+      Math.min(
+        10 * 60 * 1000,
+        asNumber(
+          cfg?.env?.vars?.WECOM_LATE_REPLY_WATCH_MS ?? requireEnv("WECOM_LATE_REPLY_WATCH_MS"),
+          Math.max(replyTimeoutMs, 180000),
+        ),
+      ),
+    );
+    const lateReplyPollMs = Math.max(
+      500,
+      Math.min(
+        10000,
+        asNumber(cfg?.env?.vars?.WECOM_LATE_REPLY_POLL_MS ?? requireEnv("WECOM_LATE_REPLY_POLL_MS"), 2000),
+      ),
     );
     const processingNoticeText = "消息已收到，正在处理中，请稍等片刻。";
     const queuedNoticeText = "上一条消息仍在处理中，你的新消息已加入队列，请稍等片刻。";
@@ -2183,6 +2386,98 @@ async function processInboundMessage({
         proxyUrl,
       });
     };
+    const startLateReplyWatcher = async (reason = "pending-final") => {
+      if (hasDeliveredReply || lateReplyWatcherPromise) return;
+
+      const watchStartedAt = Date.now();
+      const watchId = `${sessionId}:${msgId || watchStartedAt}:${Math.random().toString(36).slice(2, 8)}`;
+      ACTIVE_LATE_REPLY_WATCHERS.set(watchId, {
+        sessionId,
+        sessionKey: sessionId,
+        accountId: config.accountId || "default",
+        startedAt: watchStartedAt,
+        reason,
+      });
+
+      lateReplyWatcherPromise = (async () => {
+        try {
+          const transcriptPath = await resolveSessionTranscriptFilePath({
+            storePath,
+            sessionKey: sessionId,
+            sessionId: ctxPayload.SessionId || sessionId,
+            logger: api.logger,
+          });
+          let offset = 0;
+          let remainder = "";
+          try {
+            const fileStat = await stat(transcriptPath);
+            offset = Number(fileStat.size ?? 0);
+          } catch {
+            offset = 0;
+          }
+
+          const deadline = watchStartedAt + lateReplyWatchMs;
+          api.logger.info?.(
+            `wecom: late reply watcher started session=${sessionId} reason=${reason} timeoutMs=${lateReplyWatchMs}`,
+          );
+
+          while (Date.now() < deadline) {
+            if (hasDeliveredReply) return;
+            await sleep(lateReplyPollMs);
+            if (hasDeliveredReply) return;
+
+            const { nextOffset, chunk } = await readTranscriptAppendedChunk(transcriptPath, offset);
+            offset = nextOffset;
+            if (!chunk) continue;
+
+            const combined = remainder + chunk;
+            const lines = combined.split("\n");
+            remainder = lines.pop() ?? "";
+
+            for (const line of lines) {
+              const parsed = parseLateAssistantReplyFromTranscriptLine(line, watchStartedAt);
+              if (!parsed) continue;
+              if (hasTranscriptReplyBeenDelivered(sessionId, parsed.transcriptMessageId)) continue;
+              if (hasDeliveredReply) return;
+
+              const formattedReply = markdownToWecomText(parsed.text);
+              if (!formattedReply) continue;
+
+              await sendWecomText({
+                corpId,
+                corpSecret,
+                agentId,
+                toUser: fromUser,
+                text: formattedReply,
+                logger: api.logger,
+                proxyUrl,
+              });
+              markTranscriptReplyDelivered(sessionId, parsed.transcriptMessageId);
+              hasDeliveredReply = true;
+              api.logger.info?.(
+                `wecom: delivered async late reply session=${sessionId} transcriptMessageId=${parsed.transcriptMessageId}`,
+              );
+              return;
+            }
+          }
+
+          if (!hasDeliveredReply) {
+            api.logger.warn?.(
+              `wecom: late reply watcher timed out session=${sessionId} timeoutMs=${lateReplyWatchMs}`,
+            );
+            await sendFailureFallback(`late reply watcher timed out after ${lateReplyWatchMs}ms`);
+          }
+        } catch (err) {
+          api.logger.warn?.(`wecom: late reply watcher failed: ${String(err?.message || err)}`);
+          if (!hasDeliveredReply) {
+            await sendFailureFallback(err);
+          }
+        } finally {
+          ACTIVE_LATE_REPLY_WATCHERS.delete(watchId);
+          lateReplyWatcherPromise = null;
+        }
+      })();
+    };
 
     try {
       if (progressNoticeDelayMs > 0) {
@@ -2201,6 +2496,10 @@ async function processInboundMessage({
           cfg,
           dispatcherOptions: {
             deliver: async (payload, info) => {
+              if (suppressLateDispatcherDeliveries) {
+                api.logger.info?.("wecom: suppressed late dispatcher delivery after timeout handoff");
+                return;
+              }
               if (hasDeliveredReply) {
                 api.logger.info?.("wecom: ignoring late reply because a reply was already delivered");
                 return;
@@ -2250,6 +2549,7 @@ async function processInboundMessage({
               }
             },
             onError: async (err, info) => {
+              if (suppressLateDispatcherDeliveries) return;
               api.logger.error?.(`wecom: ${info.kind} reply failed: ${String(err)}`);
               try {
                 await sendFailureFallback(err);
@@ -2292,6 +2592,7 @@ async function processInboundMessage({
           // 常见于同一会话已有活跃 run：当前消息被排队，暂无可立即发送的最终回复
           api.logger.warn?.("wecom: no immediate deliverable reply (likely queued behind active run)");
           await sendProgressNotice(queuedNoticeText);
+          await startLateReplyWatcher("queued-no-final");
         } else {
           // 进入这里说明 dispatcher 有输出或已排队，但当前回调还没有拿到可立即下发的 final。
           // 发送处理中提示，避免用户感知为“无响应”。
@@ -2299,11 +2600,18 @@ async function processInboundMessage({
             "wecom: dispatch finished without direct final delivery; sending processing notice",
           );
           await sendProgressNotice(processingNoticeText);
+          await startLateReplyWatcher("dispatch-finished-without-final");
         }
       }
     } catch (dispatchErr) {
       api.logger.warn?.(`wecom: dispatch failed: ${String(dispatchErr)}`);
-      await sendFailureFallback(dispatchErr);
+      if (isDispatchTimeoutError(dispatchErr)) {
+        suppressLateDispatcherDeliveries = true;
+        await sendProgressNotice(queuedNoticeText);
+        await startLateReplyWatcher("dispatch-timeout");
+      } else {
+        await sendFailureFallback(dispatchErr);
+      }
     } finally {
       if (progressNoticeTimer) clearTimeout(progressNoticeTimer);
       for (const filePath of tempPathsToCleanup) {

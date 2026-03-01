@@ -126,6 +126,11 @@ openclaw plugins install openclaw-wechat
       "callbackAesKey": "默认账户EncodingAESKey",
       "webhookPath": "/wecom/callback",
       "outboundProxy": "http://127.0.0.1:7890",
+      "allowFrom": [
+        "dingxiang",
+        "wecom:ops_bot"
+      ],
+      "allowFromRejectMessage": "当前账号未授权，请联系管理员。",
       "adminUsers": [
         "dingxiang"
       ],
@@ -185,7 +190,10 @@ openclaw plugins install openclaw-wechat
           "agentId": 1000004,
           "callbackToken": "默认账户Token",
           "callbackAesKey": "默认账户EncodingAESKey",
-          "webhookPath": "/wecom/callback"
+          "webhookPath": "/wecom/callback",
+          "allowFrom": [
+            "*"
+          ]
         },
         "sales": {
           "enabled": true,
@@ -195,7 +203,12 @@ openclaw plugins install openclaw-wechat
           "callbackToken": "销售账户Token",
           "callbackAesKey": "销售账户EncodingAESKey",
           "webhookPath": "/wecom/sales/callback",
-          "outboundProxy": "http://10.0.0.5:8888"
+          "outboundProxy": "http://10.0.0.5:8888",
+          "allowFrom": [
+            "alice",
+            "wecom:bob"
+          ],
+          "allowFromRejectMessage": "销售助手未授权，请联系管理员。"
         }
       }
     }
@@ -307,6 +320,8 @@ npm run wecom:smoke
 可选策略（默认关闭，保持兼容）：
 - `channels.wecom.commands.enabled=true` 后，仅允许 `allowlist` 中的 `/` 指令
 - `channels.wecom.adminUsers` 可配置管理员用户 ID，绕过白名单限制
+- `channels.wecom.allowFrom` 可限制允许发送消息的用户（支持 `*`、`wecom:`/`user:` 前缀）
+- `channels.wecom.accounts.<id>.allowFrom` 可覆盖全局限制，实现账户级别授权
 
 ### 群聊触发策略
 
@@ -319,6 +334,12 @@ npm run wecom:smoke
 - `channels.wecom.debounce.enabled`：启用后在窗口期内合并多条文本再投递给模型
 - `channels.wecom.debounce.windowMs`：防抖窗口（默认 `1200`，范围 `100-10000`）
 - `channels.wecom.debounce.maxBatch`：单批最大合并条数（默认 `6`，范围 `1-50`）
+
+### 超时后异步补发
+
+- 当 `dispatch` 超时或会话排队导致当前回调拿不到 final 时，插件会进入“异步补发”模式
+- 插件会持续轮询 session transcript，一旦检测到该会话的新 assistant 回复，会自动回推到企业微信
+- 可用 `WECOM_LATE_REPLY_WATCH_MS` / `WECOM_LATE_REPLY_POLL_MS` 调整补发窗口与轮询频率
 
 ### 支持的消息类型
 
@@ -343,6 +364,10 @@ npm run wecom:smoke
 | `WECOM_WEBHOOK_PATH` | 否 | Webhook 路径，默认 `/wecom/callback` |
 | `WECOM_PROXY` | 否 | WeCom API 出站代理 URL（如 `http://127.0.0.1:7890`） |
 | `WECOM_<ACCOUNT>_PROXY` | 否 | 指定账户专用代理（优先级高于 `WECOM_PROXY`） |
+| `WECOM_ALLOW_FROM` | 否 | 允许发送者列表（逗号分隔，空表示不限制，支持 `*`） |
+| `WECOM_<ACCOUNT>_ALLOW_FROM` | 否 | 指定账户专用允许发送者列表（覆盖 `WECOM_ALLOW_FROM`） |
+| `WECOM_ALLOW_FROM_REJECT_MESSAGE` | 否 | 发送者未授权时回复文案 |
+| `WECOM_<ACCOUNT>_ALLOW_FROM_REJECT_MESSAGE` | 否 | 指定账户发送者未授权时回复文案 |
 | `WECOM_ADMIN_USERS` | 否 | 管理员用户 ID 列表（逗号分隔），可绕过命令白名单 |
 | `WECOM_COMMANDS_ENABLED` | 否 | 是否启用命令白名单（默认 false） |
 | `WECOM_COMMANDS_ALLOWLIST` | 否 | 允许的命令列表（逗号分隔） |
@@ -353,6 +378,8 @@ npm run wecom:smoke
 | `WECOM_DEBOUNCE_ENABLED` | 否 | 是否启用文本防抖合并（默认 false） |
 | `WECOM_DEBOUNCE_WINDOW_MS` | 否 | 防抖窗口毫秒（默认 1200） |
 | `WECOM_DEBOUNCE_MAX_BATCH` | 否 | 单次最多合并条数（默认 6） |
+| `WECOM_LATE_REPLY_WATCH_MS` | 否 | dispatch 超时/排队后，异步补发最终回复的最长等待时间（默认 180000） |
+| `WECOM_LATE_REPLY_POLL_MS` | 否 | 异步补发轮询间隔毫秒（默认 2000） |
 | `WECOM_VOICE_TRANSCRIBE_ENABLED` | 否 | 是否启用语音转写回退（默认 true） |
 | `WECOM_VOICE_TRANSCRIBE_PROVIDER` | 否 | 本地提供方：`local-whisper-cli` / `local-whisper` |
 | `WECOM_VOICE_TRANSCRIBE_COMMAND` | 否 | 本地命令路径（默认按 provider 自动探测） |

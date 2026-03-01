@@ -173,6 +173,47 @@ test("resolveWecomCommandPolicyConfig reads admin and allowlist", () => {
   assert.deepEqual(policy.adminUsers.sort(), ["alice", "bob"]);
 });
 
+test("allowFrom policy resolves account override and env fallback", () => {
+  const accountPolicy = core.resolveWecomAllowFromPolicyConfig({
+    channelConfig: {
+      allowFrom: ["wecom:global_user"],
+      allowFromRejectMessage: "全局拦截",
+    },
+    accountConfig: {
+      allowFrom: ["user:Alice", "wecom:Bob"],
+      allowFromRejectMessage: "账户拦截",
+    },
+    envVars: {
+      WECOM_ALLOW_FROM: "*",
+    },
+    processEnv: {},
+    accountId: "sales",
+  });
+  assert.deepEqual(accountPolicy.allowFrom.sort(), ["alice", "bob"]);
+  assert.equal(accountPolicy.rejectMessage, "账户拦截");
+
+  const envPolicy = core.resolveWecomAllowFromPolicyConfig({
+    channelConfig: {},
+    accountConfig: {},
+    envVars: {
+      WECOM_SALES_ALLOW_FROM: "wecom:Tom,user:Jerry",
+      WECOM_ALLOW_FROM: "*",
+      WECOM_SALES_ALLOW_FROM_REJECT_MESSAGE: "销售账号未授权",
+    },
+    processEnv: {},
+    accountId: "sales",
+  });
+  assert.deepEqual(envPolicy.allowFrom.sort(), ["jerry", "tom"]);
+  assert.equal(envPolicy.rejectMessage, "销售账号未授权");
+});
+
+test("isWecomSenderAllowed matches normalized sender ids", () => {
+  assert.equal(core.isWecomSenderAllowed({ senderId: "wecom:Alice", allowFrom: ["user:alice"] }), true);
+  assert.equal(core.isWecomSenderAllowed({ senderId: "Bob", allowFrom: ["alice"] }), false);
+  assert.equal(core.isWecomSenderAllowed({ senderId: "Tom", allowFrom: [] }), true);
+  assert.equal(core.isWecomSenderAllowed({ senderId: "Tom", allowFrom: ["*"] }), true);
+});
+
 test("group mention helpers trigger and strip correctly", () => {
   const groupCfg = core.resolveWecomGroupChatConfig({
     channelConfig: {
@@ -186,8 +227,14 @@ test("group mention helpers trigger and strip correctly", () => {
     processEnv: {},
   });
   assert.equal(core.shouldTriggerWecomGroupResponse("@AI助手 /status", groupCfg), true);
+  assert.equal(core.shouldTriggerWecomGroupResponse("请看下 test@example.com", groupCfg), false);
+  assert.equal(core.shouldTriggerWecomGroupResponse("你好@AI助手 帮我看下", groupCfg), true);
   assert.equal(core.shouldTriggerWecomGroupResponse("普通文本", groupCfg), false);
   assert.equal(core.stripWecomGroupMentions("@AI助手 /status", groupCfg.mentionPatterns), "/status");
+  assert.equal(
+    core.stripWecomGroupMentions("邮箱 test@example.com @AI助手 /status", groupCfg.mentionPatterns),
+    "邮箱 test@example.com /status",
+  );
 });
 
 test("resolveWecomDebounceConfig applies bounds and defaults", () => {

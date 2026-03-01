@@ -2,6 +2,35 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.4.7] - 2026-03-02
+
+### Added
+- 新增 WeCom 超时后异步补发链路：dispatch 超时/排队时自动轮询 transcript 并在拿到 final 后回推企业微信
+- 新增异步补发调优参数：`WECOM_LATE_REPLY_WATCH_MS`、`WECOM_LATE_REPLY_POLL_MS`
+
+### Changed
+- `dispatch timed out` 不再立即返回失败文案，优先切换到“处理中 + 异步补发”流程
+- 新增超时后晚到 dispatcher 回包抑制，避免与异步补发并发造成重复回复
+
+### Fixed
+- 修复会话排队或长耗时场景下，用户只收到“处理中/超时”而收不到最终回复的问题
+
+## [0.4.6] - 2026-03-01
+
+### Added
+- 新增发送者授权策略：`channels.wecom.allowFrom`、`channels.wecom.accounts.<id>.allowFrom`
+- 新增发送者未授权拒绝文案：`allowFromRejectMessage`、`WECOM_ALLOW_FROM_REJECT_MESSAGE`
+- 新增核心测试覆盖 `allowFrom` 解析、账户级覆盖与授权判定
+
+### Changed
+- 群聊 mention 触发匹配从简单 `includes` 升级为边界感知匹配，降低邮箱文本误触发
+- 群聊 mention 清理逻辑增强：移除 `@提及` 时不再误删 email 片段
+- `/status` 增加发送者授权策略状态展示
+
+### Fixed
+- 修复账户级 `allowFrom` 无法覆盖全局配置的问题
+- 修复 `requireMention=true` 场景中 `test@example.com` 被误判为 mention 的问题
+
 ## [0.4.5] - 2026-03-01
 
 ### Added

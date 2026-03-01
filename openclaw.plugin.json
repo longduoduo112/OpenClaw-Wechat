@@ -1,7 +1,7 @@
 {
   "id": "openclaw-wechat",
   "name": "OpenClaw-Wechat",
-  "version": "0.4.5",
+  "version": "0.4.7",
   "description": "WeCom (企业微信) channel plugin for OpenClaw (自建应用回调 + 发送 API).",
   "channels": [
     "wecom"
@@ -61,6 +61,18 @@
       "outboundProxy": {
         "type": "string",
         "description": "可选：WeCom 出站 API 代理（如 http://127.0.0.1:7890）"
+      },
+      "allowFrom": {
+        "type": "array",
+        "description": "可选：允许发送消息的用户列表（空=不限制，支持 '*'）",
+        "items": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "allowFromRejectMessage": {
+        "type": "string",
+        "description": "发送者未授权时的拒绝提示文案"
       },
       "adminUsers": {
         "type": "array",
@@ -276,6 +288,18 @@
             "outboundProxy": {
               "type": "string",
               "description": "可选：该账户专用 WeCom 出站 API 代理（覆盖 channels.wecom.outboundProxy）"
+            },
+            "allowFrom": {
+              "type": "array",
+              "description": "可选：该账户专用发送者允许列表（覆盖 channels.wecom.allowFrom）",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "allowFromRejectMessage": {
+              "type": "string",
+              "description": "可选：该账户发送者未授权时的拒绝文案（覆盖 channels.wecom.allowFromRejectMessage）"
             }
           },
           "required": [
