@@ -1164,12 +1164,12 @@ function readAccountConfigFromEnv({ envVars, accountId }) {
   const callbackToken = String(readVar("CALLBACK_TOKEN") ?? "").trim();
   const callbackAesKey = String(readVar("CALLBACK_AES_KEY") ?? "").trim();
   const webhookPath = String(readVar("WEBHOOK_PATH") ?? "/wecom/callback").trim() || "/wecom/callback";
-  const outboundProxy = String(
+  const outboundProxyRaw =
     readVar("PROXY") ??
       (normalizedId === "default"
         ? requireEnv("HTTPS_PROXY")
-        : envVars?.WECOM_PROXY ?? requireEnv("WECOM_PROXY") ?? requireEnv("HTTPS_PROXY")),
-  ).trim();
+        : envVars?.WECOM_PROXY ?? requireEnv("WECOM_PROXY") ?? requireEnv("HTTPS_PROXY"));
+  const outboundProxy = String(outboundProxyRaw ?? "").trim();
   const enabledRaw = String(readVar("ENABLED") ?? "").trim().toLowerCase();
   const enabled = !["0", "false", "off", "no"].includes(enabledRaw);
 
