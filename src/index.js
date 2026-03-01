@@ -2146,8 +2146,14 @@ async function processInboundMessage({
     let hasSentProgressNotice = false;
     let blockTextFallback = "";
     let progressNoticeTimer = null;
-    const replyTimeoutMs = Math.max(15000, asNumber(requireEnv("WECOM_REPLY_TIMEOUT_MS"), 90000));
-    const progressNoticeDelayMs = Math.max(0, asNumber(requireEnv("WECOM_PROGRESS_NOTICE_MS"), 8000));
+    const replyTimeoutMs = Math.max(
+      15000,
+      asNumber(cfg?.env?.vars?.WECOM_REPLY_TIMEOUT_MS ?? requireEnv("WECOM_REPLY_TIMEOUT_MS"), 90000),
+    );
+    const progressNoticeDelayMs = Math.max(
+      0,
+      asNumber(cfg?.env?.vars?.WECOM_PROGRESS_NOTICE_MS ?? requireEnv("WECOM_PROGRESS_NOTICE_MS"), 8000),
+    );
     const processingNoticeText = "消息已收到，正在处理中，请稍等片刻。";
     const queuedNoticeText = "上一条消息仍在处理中，你的新消息已加入队列，请稍等片刻。";
     const sendProgressNotice = async (text = processingNoticeText) => {
