@@ -212,6 +212,25 @@ test("parseWecomBotInboundMessage parses quote metadata", () => {
   assert.equal(parsed.quote?.content, "被引用消息");
 });
 
+test("parseWecomBotInboundMessage parses feedback id", () => {
+  const parsed = parseWecomBotInboundMessage({
+    msgtype: "text",
+    msgid: "fb1",
+    from: { userid: "dingxiang" },
+    text: { content: "hello" },
+    feedback: { id: "feedback-001" },
+  });
+  assert.equal(parsed.kind, "message");
+  assert.equal(parsed.feedbackId, "feedback-001");
+
+  const refresh = parseWecomBotInboundMessage({
+    msgtype: "stream",
+    stream: { id: "stream-x", feedback: { id: "feedback-002" } },
+  });
+  assert.equal(refresh.kind, "stream-refresh");
+  assert.equal(refresh.feedbackId, "feedback-002");
+});
+
 test("extractWecomXmlInboundEnvelope normalizes fields", () => {
   const envelope = extractWecomXmlInboundEnvelope({
     MsgType: "text",

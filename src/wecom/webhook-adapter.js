@@ -95,10 +95,12 @@ export function parseWecomBotInboundMessage(payload) {
   if (!payload || typeof payload !== "object") return null;
   const msgType = normalizeLowerToken(payload.msgtype);
   if (!msgType) return null;
+  const feedbackId = normalizeToken(payload?.feedback?.id || payload?.stream?.feedback?.id);
   if (msgType === "stream") {
     return {
       kind: "stream-refresh",
       streamId: normalizeToken(payload?.stream?.id),
+      feedbackId,
     };
   }
 
@@ -188,6 +190,7 @@ export function parseWecomBotInboundMessage(payload) {
     imageUrls: dedupeUrlList(imageUrls),
     fileUrl,
     fileName,
+    feedbackId,
     quote,
     isGroupChat: chatType === "group" || Boolean(chatId),
   };

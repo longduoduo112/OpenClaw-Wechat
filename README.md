@@ -397,6 +397,13 @@ node ./scripts/wecom-bot-selfcheck.mjs --help
 - 默认一用户一会话：`wecom:<userid>`
 - 群聊可配置“仅 @ 才触发”，避免误触发
 
+### 出站目标格式
+
+- `user`：`wecom:alice` / `user:alice`
+- `group`：`group:wrxxxx` / `chat:wcxxxx`
+- `party`：`party:2` / `dept:2`
+- `tag`：`tag:ops`
+
 ## 环境变量速查
 
 ### 核心与回调

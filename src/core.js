@@ -399,6 +399,44 @@ export function normalizeWecomAllowFromEntry(raw) {
     .toLowerCase();
 }
 
+export function resolveWecomTarget(rawTarget) {
+  const raw = String(rawTarget ?? "").trim();
+  if (!raw) return null;
+
+  if (/^webhook:/i.test(raw)) {
+    const webhook = raw.replace(/^webhook:/i, "").trim();
+    return webhook ? { webhook } : null;
+  }
+
+  let clean = raw.replace(/^(wecom-agent|wecom|wechatwork|wework|qywx):/i, "").trim();
+  if (!clean) return null;
+
+  if (/^party:/i.test(clean) || /^dept:/i.test(clean)) {
+    const toParty = clean.replace(/^(party|dept):/i, "").trim();
+    return toParty ? { toParty } : null;
+  }
+  if (/^tag:/i.test(clean)) {
+    const toTag = clean.replace(/^tag:/i, "").trim();
+    return toTag ? { toTag } : null;
+  }
+  if (/^(group|chat):/i.test(clean)) {
+    const chatId = clean.replace(/^(group|chat):/i, "").trim();
+    return chatId ? { chatId } : null;
+  }
+  if (/^user:/i.test(clean)) {
+    const toUser = clean.replace(/^user:/i, "").trim();
+    return toUser ? { toUser } : null;
+  }
+
+  if (/^(wr|wc)/i.test(clean)) {
+    return { chatId: clean };
+  }
+  if (/^\d+$/.test(clean)) {
+    return { toParty: clean };
+  }
+  return { toUser: clean };
+}
+
 function uniqueAllowFromList(values) {
   const deduped = new Set();
   for (const value of values) {

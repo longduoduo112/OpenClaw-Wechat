@@ -33,7 +33,7 @@ export class WecomStreamManager {
     }
   }
 
-  create(streamId, initialContent = "") {
+  create(streamId, initialContent = "", { feedbackId = "" } = {}) {
     const id = String(streamId ?? "").trim();
     if (!id) return null;
     const now = Date.now();
@@ -42,6 +42,7 @@ export class WecomStreamManager {
       id,
       content,
       finished: false,
+      feedbackId: String(feedbackId ?? "").trim() || null,
       createdAt: now,
       updatedAt: now,
     };
@@ -199,4 +200,3 @@ export class WecomSessionTaskQueue {
     }
   }
 }
-

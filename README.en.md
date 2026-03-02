@@ -204,6 +204,12 @@ Quoted reply context in Bot mode is also supported (`quote` is prepended into cu
 
 Session key policy: default is one-user-one-session (`wecom:<userid>`).
 
+Outbound target formats:
+- `user`: `wecom:alice` / `user:alice`
+- `group`: `group:wrxxxx` / `chat:wcxxxx`
+- `party`: `party:2` / `dept:2`
+- `tag`: `tag:ops`
+
 ## Environment Variables
 
 ### Core

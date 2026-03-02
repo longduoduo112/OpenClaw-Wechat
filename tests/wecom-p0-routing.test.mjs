@@ -7,8 +7,9 @@ import { resolveWebhookBotSendUrl } from "../src/wecom/webhook-bot.js";
 
 test("WecomStreamManager create/update/finish/cleanup works", () => {
   const manager = new WecomStreamManager({ expireMs: 1000, maxBytes: 32 });
-  manager.create("stream-a", "hello");
+  manager.create("stream-a", "hello", { feedbackId: "fb-1" });
   assert.equal(manager.has("stream-a"), true);
+  assert.equal(manager.get("stream-a")?.feedbackId, "fb-1");
   manager.update("stream-a", " world", { append: true });
   assert.equal(manager.get("stream-a")?.content, "hello world");
   manager.finish("stream-a");

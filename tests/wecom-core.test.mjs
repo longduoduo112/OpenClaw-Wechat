@@ -270,6 +270,25 @@ test("group trigger mode supports keyword and direct", () => {
   assert.equal(core.shouldTriggerWecomGroupResponse("大家好", directCfg), true);
 });
 
+test("resolveWecomTarget parses user/group/party/tag", () => {
+  assert.deepEqual(core.resolveWecomTarget("wecom:alice"), { toUser: "alice" });
+  assert.deepEqual(core.resolveWecomTarget("group:wr123"), { chatId: "wr123" });
+  assert.deepEqual(core.resolveWecomTarget("chat:wc456"), { chatId: "wc456" });
+  assert.deepEqual(core.resolveWecomTarget("party:2"), { toParty: "2" });
+  assert.deepEqual(core.resolveWecomTarget("dept:3"), { toParty: "3" });
+  assert.deepEqual(core.resolveWecomTarget("tag:ops"), { toTag: "ops" });
+  assert.deepEqual(core.resolveWecomTarget("user:bob"), { toUser: "bob" });
+});
+
+test("resolveWecomTarget parses webhook and heuristics", () => {
+  assert.deepEqual(core.resolveWecomTarget("webhook:https://example.com/hook"), {
+    webhook: "https://example.com/hook",
+  });
+  assert.deepEqual(core.resolveWecomTarget("wr-chat-id"), { chatId: "wr-chat-id" });
+  assert.deepEqual(core.resolveWecomTarget("1234"), { toParty: "1234" });
+  assert.equal(core.resolveWecomTarget(""), null);
+});
+
 test("resolveWecomDebounceConfig applies bounds and defaults", () => {
   const debounce = core.resolveWecomDebounceConfig({
     channelConfig: {
