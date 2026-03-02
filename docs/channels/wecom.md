@@ -45,6 +45,12 @@ Bot E2E (signed/encrypted callback + stream refresh):
 npm run wecom:bot:selfcheck
 ```
 
+Remote Bot E2E (against public callback URL):
+
+```bash
+npm run wecom:remote:e2e -- --bot-url https://your-domain.example/wecom/bot/callback
+```
+
 Upgrade smoke check:
 
 ```bash

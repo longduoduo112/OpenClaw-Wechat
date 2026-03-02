@@ -489,6 +489,7 @@ npm run wecom:bot:selfcheck
 | `npm test` | 语法与单测 |
 | `npm run wecom:selfcheck -- --all-accounts` | 配置+网络体检 |
 | `npm run wecom:bot:selfcheck` | Bot 端到端链路体检（签名/加密/stream-refresh） |
+| `npm run wecom:remote:e2e -- --bot-url <公网回调>` | 远端 Bot 端到端验证（公网域名/隧道） |
 | `npm run wecom:smoke` | 升级后快速回归（Agent 主链路） |
 | `npm run wecom:smoke -- --with-bot-e2e` | 升级后快速回归（含 Bot E2E） |
 | `openclaw gateway restart` | 重启网关 |

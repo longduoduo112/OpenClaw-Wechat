@@ -41,6 +41,7 @@
     "test": "npm run test:syntax && node --test tests/*.test.mjs",
     "wecom:selfcheck": "node ./scripts/wecom-selfcheck.mjs",
     "wecom:bot:selfcheck": "node ./scripts/wecom-bot-selfcheck.mjs",
+    "wecom:remote:e2e": "node ./scripts/wecom-remote-e2e.mjs",
     "wecom:smoke": "bash ./scripts/wecom-smoke.sh"
   },
   "dependencies": {

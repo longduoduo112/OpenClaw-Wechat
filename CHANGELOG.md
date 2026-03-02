@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- 新增远端 Bot 端到端脚本：`npm run wecom:remote:e2e -- --bot-url <公网回调>`
+- 新增回包编排模块：`src/wecom/outbound-delivery.js`
+- 新增回包编排单测：`tests/wecom-outbound-delivery.test.mjs`
+
+### Changed
+- P3 模块化拆分第一步：Bot 回包链路从 `src/index.js` 抽离到独立模块（保持行为兼容）
+- 文档补充远端 E2E 指令（中英文 README + 渠道文档）
+- 移除仓库内 `docs/compare-sunnoy-gap.md`（仅保留本地副本）
+
 ## [0.5.0] - 2026-03-02
 
 ### Added

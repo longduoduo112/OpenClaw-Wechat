@@ -280,6 +280,7 @@ npm run wecom:bot:selfcheck
 | `npm test` | syntax + tests |
 | `npm run wecom:selfcheck -- --all-accounts` | config/network self-check |
 | `npm run wecom:bot:selfcheck` | Bot E2E self-check (signature/encryption/stream-refresh) |
+| `npm run wecom:remote:e2e -- --bot-url <public-callback>` | remote Bot E2E verification (public domain/tunnel) |
 | `npm run wecom:smoke` | smoke test after upgrades (Agent path) |
 | `npm run wecom:smoke -- --with-bot-e2e` | smoke test after upgrades (with Bot E2E) |
 | `openclaw gateway restart` | restart runtime |
