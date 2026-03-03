@@ -24,6 +24,11 @@ import {
   webhookSendText,
 } from "./wecom/webhook-bot.js";
 import {
+  buildMediaFetchErrorMessage,
+  inferFilenameFromMediaDownload,
+  smartDecryptWecomFileBuffer,
+} from "./wecom/media-download.js";
+import {
   WECOM_TEXT_BYTE_LIMIT,
   buildWecomSessionId,
   buildInboundDedupeKey,
@@ -66,7 +71,7 @@ const xmlParser = new XMLParser({
 
 // 请求体大小限制 (1MB)
 const MAX_REQUEST_BODY_SIZE = 1024 * 1024;
-const PLUGIN_VERSION = "0.5.0";
+const PLUGIN_VERSION = "0.5.2";
 const WECOM_TEMP_DIR_NAME = "openclaw-wechat";
 const WECOM_TEMP_FILE_RETENTION_MS = 30 * 60 * 1000;
 const FFMPEG_PATH_CHECK_CACHE = {
@@ -1543,7 +1548,15 @@ async function fetchMediaFromUrl(url, { proxyUrl, logger, forceProxy = false, ma
     }
     const contentType = guessContentTypeByPath(localPath);
     logger?.info?.(`wecom: loaded local media ${localPath} (${buffer.length} bytes)`);
-    return { buffer, contentType };
+    return {
+      buffer,
+      contentType,
+      contentDisposition: "",
+      finalUrl: localPath,
+      status: 200,
+      statusText: "OK",
+      source: "local",
+    };
   }
 
   const res = await fetchWithRetry(
@@ -1560,7 +1573,23 @@ async function fetchMediaFromUrl(url, { proxyUrl, logger, forceProxy = false, ma
     { proxyUrl, logger },
   );
   if (!res.ok) {
-    throw new Error(`Failed to fetch media from URL: ${res.status}`);
+    const contentType = res.headers.get("content-type") || "";
+    let bodyPreview = "";
+    if (/application\/json|^text\/|xml|javascript/i.test(contentType)) {
+      bodyPreview = String(await res.text().catch(() => ""))
+        .replace(/\s+/g, " ")
+        .trim()
+        .slice(0, 200);
+    }
+    throw new Error(
+      buildMediaFetchErrorMessage({
+        url: res.url || url,
+        status: res.status,
+        statusText: res.statusText,
+        contentType,
+        bodyPreview,
+      }),
+    );
   }
   const contentLength = Number(res.headers.get("content-length") ?? 0);
   if (Number.isFinite(contentLength) && contentLength > 0 && contentLength > maxBytes) {
@@ -1571,7 +1600,15 @@ async function fetchMediaFromUrl(url, { proxyUrl, logger, forceProxy = false, ma
     throw new Error(`Media too large (${buffer.length} bytes > ${maxBytes} bytes)`);
   }
   const contentType = res.headers.get("content-type") || "application/octet-stream";
-  return { buffer, contentType };
+  return {
+    buffer,
+    contentType,
+    contentDisposition: res.headers.get("content-disposition") || "",
+    finalUrl: res.url || url,
+    status: res.status,
+    statusText: res.statusText || "",
+    source: "remote",
+  };
 }
 
 function detectImageContentTypeFromBuffer(buffer) {
@@ -3388,28 +3425,50 @@ async function processBotInboundMessage({
     }
 
     if (msgType === "file") {
-      const displayName = normalizedFileName || "附件";
+      const displayName =
+        inferFilenameFromMediaDownload({
+          explicitName: normalizedFileName,
+          sourceUrl: normalizedFileUrl,
+          contentType: "",
+        }) || "附件";
       if (normalizedFileUrl) {
         try {
           const tempDir = join(tmpdir(), WECOM_TEMP_DIR_NAME);
           await mkdir(tempDir, { recursive: true });
-          const { buffer } = await fetchMediaFromUrl(normalizedFileUrl, {
+          const downloaded = await fetchMediaFromUrl(normalizedFileUrl, {
             proxyUrl: botProxyUrl,
             logger: api.logger,
             forceProxy: Boolean(botProxyUrl),
             maxBytes: 20 * 1024 * 1024,
           });
-          const safeName = basename(displayName) || `file-${Date.now()}.bin`;
+          const resolvedName = inferFilenameFromMediaDownload({
+            explicitName: normalizedFileName,
+            contentDisposition: downloaded.contentDisposition,
+            sourceUrl: downloaded.finalUrl || normalizedFileUrl,
+            contentType: downloaded.contentType,
+          });
+          const decrypted = smartDecryptWecomFileBuffer({
+            buffer: downloaded.buffer,
+            aesKey: botModeConfig?.encodingAesKey,
+            contentType: downloaded.contentType,
+            sourceUrl: downloaded.finalUrl || normalizedFileUrl,
+            decryptFn: decryptWecomMediaBuffer,
+            logger: api.logger,
+          });
+          const safeName = basename(resolvedName) || `file-${Date.now()}.bin`;
           const fileTempPath = join(
             tempDir,
             `bot-file-${Date.now()}-${Math.random().toString(36).slice(2, 10)}-${safeName}`,
           );
-          await writeFile(fileTempPath, buffer);
+          await writeFile(fileTempPath, decrypted.buffer);
           tempPathsToCleanup.push(fileTempPath);
           messageText =
             `[用户发送了一个文件: ${safeName}，已保存到: ${fileTempPath}]` +
             "\n\n请根据文件内容回复用户；如需读取详情请使用 Read 工具。";
-          api.logger.info?.(`wecom(bot): saved file to ${fileTempPath}, size=${buffer.length} bytes`);
+          api.logger.info?.(
+            `wecom(bot): saved file to ${fileTempPath}, size=${decrypted.buffer.length} bytes` +
+              `, decrypted=${decrypted.decrypted ? "yes" : "no"} source=${downloaded.source || "unknown"}`,
+          );
         } catch (fileErr) {
           api.logger.warn?.(`wecom(bot): failed to fetch file url: ${String(fileErr?.message || fileErr)}`);
           messageText = `[用户发送了一个文件: ${displayName}，但下载失败]\n\n请提示用户重新发送文件。`;
@@ -4470,4 +4529,7 @@ export const __internal = {
   pickAccountBySignature,
   buildWecomMessageSendRequest,
   resolveWecomWebhookTargetConfig,
+  buildMediaFetchErrorMessage,
+  inferFilenameFromMediaDownload,
+  smartDecryptWecomFileBuffer,
 };

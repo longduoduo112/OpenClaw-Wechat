@@ -4,6 +4,24 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.5.2] - 2026-03-03
+
+### Added
+- 新增 Bot 文件下载能力模块：`src/wecom/media-download.js`
+- 新增 Bot 文件智能解密：自动识别明文文件并按需解密 AES 媒体，失败自动回退原始字节
+- 新增文件名智能推断：支持 `explicitName / Content-Disposition / URL` 多来源合并推断并自动补扩展名
+- 新增媒体下载错误构造器：输出 `status/statusText/content-type/url/bodyPreview`
+- 新增媒体下载单测：`tests/wecom-media-download.test.mjs`
+
+### Changed
+- Bot `msgtype=file` 入站处理升级：文件落盘前接入智能解密与文件名推断
+- `fetchMediaFromUrl` 返回结构增强：补充 `contentDisposition/finalUrl/status/source` 元信息
+
+### Fixed
+- 修复部分 Bot 文件回调在“已是明文内容”场景被误解密导致文件损坏的问题
+- 修复文件名常被回落为泛化名称（如 `file`）导致可读性差的问题
+- 修复媒体下载失败日志信息过少、难以定位远端错误的问题
+
 ## [0.5.1] - 2026-03-03
 
 ### Added
