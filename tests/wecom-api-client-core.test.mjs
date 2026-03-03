@@ -1,0 +1,87 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+
+import { createWecomApiClientCore } from "../src/wecom/api-client-core.js";
+
+function createJsonResponse(payload, { ok = true, contentType = "application/json" } = {}) {
+  return {
+    ok,
+    headers: {
+      get(name) {
+        if (String(name).toLowerCase() === "content-type") return contentType;
+        return "";
+      },
+    },
+    async json() {
+      return payload;
+    },
+    clone() {
+      return {
+        async json() {
+          return payload;
+        },
+      };
+    },
+  };
+}
+
+test("createWecomApiClientCore attaches and reuses proxy dispatcher", () => {
+  const created = [];
+  class FakeProxyAgent {
+    constructor(url) {
+      this.url = url;
+      created.push(url);
+    }
+  }
+
+  const core = createWecomApiClientCore({
+    fetchImpl: async () => createJsonResponse({ errcode: 0 }),
+    proxyAgentCtor: FakeProxyAgent,
+    sleep: async () => {},
+  });
+
+  const first = core.attachWecomProxyDispatcher(
+    "https://qyapi.weixin.qq.com/cgi-bin/gettoken",
+    {},
+    { proxyUrl: "http://127.0.0.1:8080" },
+  );
+  const second = core.attachWecomProxyDispatcher(
+    "https://qyapi.weixin.qq.com/cgi-bin/gettoken",
+    {},
+    { proxyUrl: "http://127.0.0.1:8080" },
+  );
+
+  assert.ok(first.dispatcher);
+  assert.equal(second.dispatcher, first.dispatcher);
+  assert.equal(created.length, 1);
+});
+
+test("createWecomApiClientCore caches access token by corpId", async () => {
+  let tokenCalls = 0;
+  const core = createWecomApiClientCore({
+    fetchImpl: async (url) => {
+      if (String(url).includes("/gettoken?")) {
+        tokenCalls += 1;
+        return createJsonResponse({ errcode: 0, access_token: "token-core", expires_in: 7200 });
+      }
+      return createJsonResponse({ errcode: 0 });
+    },
+    proxyAgentCtor: class FakeProxyAgent {},
+    sleep: async () => {},
+  });
+
+  const token1 = await core.getWecomAccessToken({
+    corpId: "ww-core",
+    corpSecret: "secret",
+    logger: { info() {}, warn() {}, error() {} },
+  });
+  const token2 = await core.getWecomAccessToken({
+    corpId: "ww-core",
+    corpSecret: "secret",
+    logger: { info() {}, warn() {}, error() {} },
+  });
+
+  assert.equal(token1, "token-core");
+  assert.equal(token2, "token-core");
+  assert.equal(tokenCalls, 1);
+});
