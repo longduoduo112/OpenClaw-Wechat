@@ -53,6 +53,7 @@ export function createWecomBotReplyDeliverer({
   markBotResponseUrlUsed,
   createDeliveryTraceId,
   hasBotStream,
+  resolveActiveBotStreamId = () => "",
   finishBotStream,
   getWecomConfig,
   sendWecomText,
@@ -74,6 +75,7 @@ export function createWecomBotReplyDeliverer({
   assertFunction("markBotResponseUrlUsed", markBotResponseUrlUsed);
   assertFunction("createDeliveryTraceId", createDeliveryTraceId);
   assertFunction("hasBotStream", hasBotStream);
+  assertFunction("resolveActiveBotStreamId", resolveActiveBotStreamId);
   assertFunction("finishBotStream", finishBotStream);
   assertFunction("getWecomConfig", getWecomConfig);
   assertFunction("sendWecomText", sendWecomText);
@@ -242,17 +244,29 @@ export function createWecomBotReplyDeliverer({
       observability: observabilityPolicy,
       handlers: {
         active_stream: async ({ text: content }) => {
-          if (normalizedMediaUrls.length > 0) {
-            return { ok: false, reason: "stream-media-unsupported" };
+          let targetStreamId = String(streamId ?? "").trim();
+          let recoveredBySession = false;
+          if (!targetStreamId || !hasBotStream(targetStreamId)) {
+            const recovered = String(resolveActiveBotStreamId(normalizedSessionId) ?? "").trim();
+            if (recovered && hasBotStream(recovered)) {
+              targetStreamId = recovered;
+              recoveredBySession = true;
+            }
           }
-          if (!streamId || !hasBotStream(streamId)) {
+          if (!targetStreamId || !hasBotStream(targetStreamId)) {
             return { ok: false, reason: "stream-missing" };
           }
-          finishBotStream(streamId, content);
+          const streamContent =
+            normalizedMediaUrls.length > 0
+              ? `${content || fallbackText}${mediaFallbackSuffix}`.trim()
+              : String(content ?? "").trim();
+          finishBotStream(targetStreamId, streamContent);
           return {
             ok: true,
             meta: {
-              streamId,
+              streamId: targetStreamId,
+              recoveredBySession,
+              mediaAsLinks: normalizedMediaUrls.length > 0,
             },
           };
         },

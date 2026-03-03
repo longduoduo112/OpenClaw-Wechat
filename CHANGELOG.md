@@ -4,6 +4,23 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.5.3] - 2026-03-03
+
+### Added
+- 新增 Bot 活跃流恢复索引（session -> stream 历史映射），支持回包阶段按会话兜底恢复可用 stream
+- 新增 `/workspace/...` 路径自动提取与宿主机路径映射工具（`extractWorkspacePathsFromText`、`resolveWorkspacePathToHost`）
+- 新增 tiny file 文本兜底工具：`buildTinyFileFallbackText`（用于规避企业微信文件上传最小字节限制）
+- 新增回归测试：Bot 活跃流恢复、active_stream 媒体链接回包、workspace 路径提取与 tiny file 文本兜底
+
+### Changed
+- Agent 出站媒体发送链路新增小文件兜底：`file` 且小于 5 bytes 时自动改为文本回传
+- Agent 文本最终回包新增 `/workspace/...` 文件自动回传能力（检测到存在文件时自动发送并追加提示）
+- Bot 回包 `active_stream` 层支持媒体链接内容，不再在有媒体时直接判定 `stream-media-unsupported`
+
+### Fixed
+- 修复 Bot 回包在 streamId 缺失/失效时无法按会话恢复活跃 stream 的问题
+- 修复含中文标点的 `/workspace/...` 路径提取误识别问题
+
 ## [0.5.2] - 2026-03-03
 
 ### Added

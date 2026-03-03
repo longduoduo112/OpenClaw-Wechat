@@ -24,8 +24,11 @@ import {
   webhookSendText,
 } from "./wecom/webhook-bot.js";
 import {
+  buildTinyFileFallbackText,
   buildMediaFetchErrorMessage,
+  extractWorkspacePathsFromText,
   inferFilenameFromMediaDownload,
+  resolveWorkspacePathToHost,
   smartDecryptWecomFileBuffer,
 } from "./wecom/media-download.js";
 import {
@@ -71,9 +74,10 @@ const xmlParser = new XMLParser({
 
 // 请求体大小限制 (1MB)
 const MAX_REQUEST_BODY_SIZE = 1024 * 1024;
-const PLUGIN_VERSION = "0.5.2";
+const PLUGIN_VERSION = "0.5.3";
 const WECOM_TEMP_DIR_NAME = "openclaw-wechat";
 const WECOM_TEMP_FILE_RETENTION_MS = 30 * 60 * 1000;
+const WECOM_MIN_FILE_SIZE = 5;
 const FFMPEG_PATH_CHECK_CACHE = {
   checked: false,
   available: false,
@@ -100,6 +104,9 @@ const BOT_SESSION_TASK_QUEUE = new WecomSessionTaskQueue({ maxConcurrentPerSessi
 const WECOM_SESSION_TASK_QUEUE = new WecomSessionTaskQueue({ maxConcurrentPerSession: 1 });
 const BOT_RESPONSE_URL_CACHE = new Map();
 const BOT_RESPONSE_URL_TTL_MS = 60 * 60 * 1000;
+const BOT_ACTIVE_STREAMS = new Map();
+const BOT_ACTIVE_STREAM_HISTORY = new Map();
+const BOT_STREAM_TO_SESSION = new Map();
 
 function readRequestBody(req, maxSize = MAX_REQUEST_BODY_SIZE) {
   return new Promise((resolve, reject) => {
@@ -229,8 +236,71 @@ function buildWecomBotEncryptedResponse({ token, aesKey, timestamp, nonce, plain
   });
 }
 
+function normalizeBotSessionId(sessionId) {
+  return String(sessionId ?? "").trim().toLowerCase();
+}
+
+function registerBotActiveStream(sessionId, streamId) {
+  const normalizedSessionId = normalizeBotSessionId(sessionId);
+  const normalizedStreamId = String(streamId ?? "").trim();
+  if (!normalizedSessionId || !normalizedStreamId) return;
+
+  const history = BOT_ACTIVE_STREAM_HISTORY.get(normalizedSessionId) ?? [];
+  const deduped = history.filter((id) => id !== normalizedStreamId);
+  deduped.push(normalizedStreamId);
+  BOT_ACTIVE_STREAM_HISTORY.set(normalizedSessionId, deduped);
+  BOT_ACTIVE_STREAMS.set(normalizedSessionId, normalizedStreamId);
+  BOT_STREAM_TO_SESSION.set(normalizedStreamId, normalizedSessionId);
+}
+
+function unregisterBotActiveStream(sessionId, streamId) {
+  const normalizedSessionId = normalizeBotSessionId(sessionId);
+  const normalizedStreamId = String(streamId ?? "").trim();
+  if (!normalizedSessionId || !normalizedStreamId) return;
+
+  const history = BOT_ACTIVE_STREAM_HISTORY.get(normalizedSessionId) ?? [];
+  const remaining = history.filter((id) => id !== normalizedStreamId);
+  if (remaining.length > 0) {
+    BOT_ACTIVE_STREAM_HISTORY.set(normalizedSessionId, remaining);
+    BOT_ACTIVE_STREAMS.set(normalizedSessionId, remaining[remaining.length - 1]);
+  } else {
+    BOT_ACTIVE_STREAM_HISTORY.delete(normalizedSessionId);
+    BOT_ACTIVE_STREAMS.delete(normalizedSessionId);
+  }
+  BOT_STREAM_TO_SESSION.delete(normalizedStreamId);
+}
+
+function resolveBotActiveStream(sessionId) {
+  const normalizedSessionId = normalizeBotSessionId(sessionId);
+  if (!normalizedSessionId) return "";
+
+  const history = BOT_ACTIVE_STREAM_HISTORY.get(normalizedSessionId) ?? [];
+  if (history.length === 0) {
+    BOT_ACTIVE_STREAMS.delete(normalizedSessionId);
+    return "";
+  }
+
+  const remaining = history.filter((id) => hasBotStream(id));
+  if (remaining.length === 0) {
+    BOT_ACTIVE_STREAM_HISTORY.delete(normalizedSessionId);
+    BOT_ACTIVE_STREAMS.delete(normalizedSessionId);
+    return "";
+  }
+
+  BOT_ACTIVE_STREAM_HISTORY.set(normalizedSessionId, remaining);
+  const latest = remaining[remaining.length - 1];
+  BOT_ACTIVE_STREAMS.set(normalizedSessionId, latest);
+  return latest;
+}
+
 function createBotStream(streamId, initialContent = "", options = {}) {
-  return BOT_STREAM_MANAGER.create(streamId, initialContent, options);
+  const stream = BOT_STREAM_MANAGER.create(streamId, initialContent, options);
+  const normalizedStreamId = String(streamId ?? "").trim();
+  const normalizedSessionId = normalizeBotSessionId(options?.sessionId);
+  if (stream && normalizedStreamId && normalizedSessionId) {
+    registerBotActiveStream(normalizedSessionId, normalizedStreamId);
+  }
+  return stream;
 }
 
 function updateBotStream(streamId, content, { append = false, finished = false } = {}) {
@@ -238,7 +308,13 @@ function updateBotStream(streamId, content, { append = false, finished = false }
 }
 
 function finishBotStream(streamId, content) {
-  return BOT_STREAM_MANAGER.finish(streamId, content);
+  const normalizedStreamId = String(streamId ?? "").trim();
+  const stream = BOT_STREAM_MANAGER.finish(normalizedStreamId, content);
+  if (stream) {
+    const sessionId = BOT_STREAM_TO_SESSION.get(normalizedStreamId);
+    if (sessionId) unregisterBotActiveStream(sessionId, normalizedStreamId);
+  }
+  return stream;
 }
 
 function getBotStream(streamId) {
@@ -1722,6 +1798,117 @@ function normalizeOutboundMediaUrls({ mediaUrl, mediaUrls } = {}) {
   return out;
 }
 
+async function autoSendWorkspaceFilesFromReplyText({
+  text,
+  routeAgentId,
+  corpId,
+  corpSecret,
+  agentId,
+  toUser,
+  toParty,
+  toTag,
+  chatId,
+  logger,
+  proxyUrl,
+  maxDetect = 6,
+} = {}) {
+  const normalizedText = String(text ?? "");
+  const normalizedRouteAgentId = String(routeAgentId ?? "").trim();
+  if (!normalizedText || !normalizedRouteAgentId) {
+    return {
+      detectedCount: 0,
+      matchedCount: 0,
+      sentCount: 0,
+      failed: [],
+      sentPaths: [],
+    };
+  }
+
+  const workspacePaths = extractWorkspacePathsFromText(normalizedText, maxDetect);
+  if (workspacePaths.length === 0) {
+    return {
+      detectedCount: 0,
+      matchedCount: 0,
+      sentCount: 0,
+      failed: [],
+      sentPaths: [],
+    };
+  }
+
+  const resolved = [];
+  for (const workspacePath of workspacePaths) {
+    const hostPath = resolveWorkspacePathToHost({
+      workspacePath,
+      agentId: normalizedRouteAgentId,
+    });
+    if (!hostPath) continue;
+    try {
+      const fileStat = await stat(hostPath);
+      if (!fileStat.isFile()) continue;
+      resolved.push({ workspacePath, hostPath });
+    } catch {
+      // ignore missing files
+    }
+  }
+
+  if (resolved.length === 0) {
+    return {
+      detectedCount: workspacePaths.length,
+      matchedCount: 0,
+      sentCount: 0,
+      failed: [],
+      sentPaths: [],
+    };
+  }
+
+  const mediaResult = await sendWecomOutboundMediaBatch({
+    corpId,
+    corpSecret,
+    agentId,
+    toUser,
+    toParty,
+    toTag,
+    chatId,
+    mediaUrls: resolved.map((item) => item.hostPath),
+    logger,
+    proxyUrl,
+  });
+
+  const failedByPath = new Map();
+  for (const item of mediaResult.failed) {
+    failedByPath.set(String(item?.url ?? ""), String(item?.reason ?? "unknown"));
+  }
+
+  const failed = [];
+  const sentPaths = [];
+  for (const item of resolved) {
+    const failReason = failedByPath.get(item.hostPath);
+    if (failReason) {
+      failed.push({
+        workspacePath: item.workspacePath,
+        hostPath: item.hostPath,
+        reason: failReason,
+      });
+    } else {
+      sentPaths.push(item.workspacePath);
+    }
+  }
+
+  if (sentPaths.length > 0) {
+    logger?.info?.(
+      `wecom: auto-sent workspace files agent=${normalizedRouteAgentId} sent=${sentPaths.length} detected=${workspacePaths.length}`,
+    );
+  }
+
+  return {
+    detectedCount: workspacePaths.length,
+    matchedCount: resolved.length,
+    sentCount: sentPaths.length,
+    failed,
+    sentPaths,
+  };
+}
+
 async function sendWecomWebhookMediaBatch({
   webhook,
   webhookTargets,
@@ -1837,6 +2024,29 @@ async function sendWecomOutboundMediaBatch({
         forceProxy: Boolean(proxyUrl),
         maxBytes,
       });
+      if (target.type === "file" && buffer.length < WECOM_MIN_FILE_SIZE) {
+        const fallbackText = buildTinyFileFallbackText({
+          fileName: target.filename,
+          buffer,
+        });
+        await sendWecomText({
+          corpId,
+          corpSecret,
+          agentId,
+          toUser,
+          toParty,
+          toTag,
+          chatId,
+          text: fallbackText,
+          logger,
+          proxyUrl,
+        });
+        logger?.info?.(
+          `wecom: tiny file fallback as text (${buffer.length} bytes) target=${candidate.slice(0, 120)}`,
+        );
+        sentCount += 1;
+        continue;
+      }
       const mediaId = await uploadWecomMedia({
         corpId,
         corpSecret,
@@ -2267,6 +2477,7 @@ const { deliverBotReplyText } = createWecomBotReplyDeliverer({
   markBotResponseUrlUsed,
   createDeliveryTraceId,
   hasBotStream,
+  resolveActiveBotStreamId: resolveBotActiveStream,
   finishBotStream,
   getWecomConfig,
   sendWecomText,
@@ -2582,10 +2793,13 @@ function registerWecomBotWebhookRoute(api) {
             return;
           }
 
+          const botSessionId = buildWecomBotSessionId(parsed.fromUser);
           const streamId = `stream_${crypto.randomUUID?.() || `${Date.now()}_${Math.random().toString(36).slice(2, 10)}`}`;
           const feedbackId = String(parsed.feedbackId ?? "").trim();
-          createBotStream(streamId, botConfig.placeholderText, { feedbackId });
-          const botSessionId = buildWecomBotSessionId(parsed.fromUser);
+          createBotStream(streamId, botConfig.placeholderText, {
+            feedbackId,
+            sessionId: botSessionId,
+          });
           if (parsed.responseUrl) {
             upsertBotResponseUrlCache({
               sessionId: botSessionId,
@@ -4356,18 +4570,42 @@ async function processInboundMessage({
                 // 应用 Markdown 转换
                 if (!deliveredFinalText) {
                   const formattedReply = markdownToWecomText(payload.text);
+                  const workspaceAutoMedia = await autoSendWorkspaceFilesFromReplyText({
+                    text: formattedReply,
+                    routeAgentId: routedAgentId,
+                    corpId,
+                    corpSecret,
+                    agentId,
+                    toUser: fromUser,
+                    logger: api.logger,
+                    proxyUrl,
+                  });
+                  const workspaceHints = [];
+                  if (workspaceAutoMedia.sentCount > 0) {
+                    workspaceHints.push(
+                      `已按回复中的 /workspace 路径自动回传 ${workspaceAutoMedia.sentCount} 个文件。`,
+                    );
+                  }
+                  if (workspaceAutoMedia.failed.length > 0) {
+                    const failedPreview = workspaceAutoMedia.failed
+                      .slice(0, 3)
+                      .map((item) => `${item.workspacePath}（${String(item.reason ?? "失败").slice(0, 60)}）`)
+                      .join("\n");
+                    workspaceHints.push(`以下文件自动回传失败：\n${failedPreview}`);
+                  }
+                  const finalReplyText = [formattedReply, ...workspaceHints].filter(Boolean).join("\n\n");
                   await sendWecomText({
                     corpId,
                     corpSecret,
                     agentId,
                     toUser: fromUser,
-                    text: formattedReply,
+                    text: finalReplyText,
                     logger: api.logger,
                     proxyUrl,
                   });
                   hasDeliveredReply = true;
                   deliveredFinalText = true;
-                  api.logger.info?.(`wecom: sent AI reply to ${fromUser}: ${formattedReply.slice(0, 50)}...`);
+                  api.logger.info?.(`wecom: sent AI reply to ${fromUser}: ${finalReplyText.slice(0, 50)}...`);
                 }
               }
 

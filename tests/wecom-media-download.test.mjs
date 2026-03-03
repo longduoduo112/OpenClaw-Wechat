@@ -2,9 +2,12 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  buildTinyFileFallbackText,
   buildMediaFetchErrorMessage,
   detectMagicFileExtension,
+  extractWorkspacePathsFromText,
   inferFilenameFromMediaDownload,
+  resolveWorkspacePathToHost,
   smartDecryptWecomFileBuffer,
 } from "../src/wecom/media-download.js";
 
@@ -99,4 +102,30 @@ test("buildMediaFetchErrorMessage includes status and metadata", () => {
   assert.match(message, /Forbidden/);
   assert.match(message, /content-type=application\/json/);
   assert.match(message, /url=https:\/\/example.com\/file/);
+});
+
+test("extractWorkspacePathsFromText finds and dedupes workspace paths", () => {
+  const paths = extractWorkspacePathsFromText(
+    "请发送 /workspace/out/report.pdf 和 MEDIA:/workspace/out/report.pdf，还有 /workspace/logs/run.txt。",
+  );
+  assert.deepEqual(paths, ["/workspace/out/report.pdf", "/workspace/logs/run.txt"]);
+});
+
+test("resolveWorkspacePathToHost maps sandbox path to host workspace", () => {
+  const host = resolveWorkspacePathToHost({
+    workspacePath: "/workspace/output/result.csv",
+    agentId: "wecom-dm-sales-alice",
+    homeDir: "/Users/dingxiang",
+  });
+  assert.equal(host, "/Users/dingxiang/.openclaw/workspace-wecom-dm-sales-alice/output/result.csv");
+});
+
+test("buildTinyFileFallbackText renders tiny text file content", () => {
+  const text = buildTinyFileFallbackText({
+    fileName: "tiny.txt",
+    buffer: Buffer.from("ok", "utf8"),
+  });
+  assert.match(text, /tiny\.txt/);
+  assert.match(text, /2 bytes/);
+  assert.match(text, /ok/);
 });

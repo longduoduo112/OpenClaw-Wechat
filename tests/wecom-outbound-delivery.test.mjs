@@ -46,6 +46,7 @@ function createDeliverer(overrides = {}) {
     },
     createDeliveryTraceId: () => "trace-test",
     hasBotStream: (streamId) => streamId === "stream-ok",
+    resolveActiveBotStreamId: () => "",
     finishBotStream: (streamId, content) => {
       finishedStreams.push({ streamId, content });
     },
@@ -165,4 +166,47 @@ test("deliverBotReplyText sends webhook media when webhook bot enabled", async (
   assert.equal(result.layer, "webhook_bot");
   assert.equal(webhookCalls.text.length, 1);
   assert.equal(webhookCalls.image.length, 1);
+});
+
+test("deliverBotReplyText can recover active stream by session id", async () => {
+  const deliverer = createDeliverer({
+    hasBotStream: (streamId) => streamId === "stream-recovered",
+    resolveActiveBotStreamId: (sessionId) =>
+      sessionId === "wecom-bot:dingxiang" ? "stream-recovered" : "",
+  });
+
+  const result = await deliverer.deliverBotReplyText({
+    api: createApiMock(),
+    fromUser: "dingxiang",
+    sessionId: "wecom-bot:dingxiang",
+    streamId: "stream-missing",
+    text: "hello recovered",
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.layer, "active_stream");
+  assert.deepEqual(deliverer.finishedStreams, [
+    { streamId: "stream-recovered", content: "hello recovered" },
+  ]);
+});
+
+test("deliverBotReplyText sends media links via active_stream when stream exists", async () => {
+  const deliverer = createDeliverer({
+    hasBotStream: (streamId) => streamId === "stream-ok",
+  });
+
+  const result = await deliverer.deliverBotReplyText({
+    api: createApiMock(),
+    fromUser: "dingxiang",
+    sessionId: "wecom-bot:dingxiang",
+    streamId: "stream-ok",
+    text: "媒体结果",
+    mediaUrls: ["https://example.com/a.png"],
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.layer, "active_stream");
+  assert.equal(deliverer.finishedStreams.length, 1);
+  assert.match(deliverer.finishedStreams[0].content, /媒体链接/);
+  assert.match(deliverer.finishedStreams[0].content, /https:\/\/example.com\/a\.png/);
 });
