@@ -32,6 +32,18 @@ Named webhook targets (optional):
 
 - Configure `channels.wecom.webhooks` (or `accounts.<id>.webhooks`) and send to `webhook:<name>`.
 
+## Group Chat Checklist
+
+To enable direct group chat response (without `@`), ensure:
+
+1. Plugin config uses `channels.wecom.groupChat.enabled=true` and `triggerMode=direct`.
+2. WeCom app has message callback enabled and URL verification succeeded.
+3. App visibility scope includes members in that group.
+4. The group actually contains your self-built app (not only a webhook bot).
+5. Runtime logs show `chatId=...` for inbound messages.
+
+If logs never show `chatId`, WeCom is not delivering group messages to this callback.
+
 ## Selfcheck
 
 Run:

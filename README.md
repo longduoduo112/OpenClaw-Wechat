@@ -480,6 +480,7 @@ node ./scripts/wecom-bot-selfcheck.mjs --help
 | 现象 | 先看什么 | 常见原因 | 处理建议 |
 |---|---|---|---|
 | 回调验证失败 | `curl https://域名/wecom/callback` | URL 不通、Token/AESKey 不一致 | 先通公网，再核对配置 |
+| `curl /wecom/callback` 返回 WebUI 页面 | 反向代理路由与回调路径 | 域名把 `/wecom/callback` 转发到了前端/静态站点 | 单独为 `/wecom/*` 配置反向代理到 OpenClaw 网关端口 |
 | 能收到消息但不回复 | `openclaw gateway status` + `openclaw logs --follow` | 模型超时、会话排队、权限策略拦截 | 查看 dispatch/allowFrom/commands 日志 |
 | Bot 图片识别失败 | `wecom(bot): failed to fetch image url` | URL 失效、返回非图像流 | 已支持 octet-stream+解密兜底，先升级到最新版本 |
 | 语音转写失败 | `wecom: voice transcription failed` | 本地命令或模型路径错误 | 检查 `command`、`modelPath`、`ffmpeg` |
@@ -531,6 +532,37 @@ npm run wecom:bot:selfcheck
 
 ### Q4：支持个人微信吗？
 支持企业微信场景下的“微信插件入口”（个人微信扫码进入企业应用对话），不等同于“个人微信网页版协议”。
+
+### Q5：为什么 `curl https://域名/wecom/callback` 返回的是 WebUI 页面？
+这是路由层问题，不是插件正常行为。`GET /wecom/callback`（无 `echostr`）应返回纯文本 `wecom webhook ok`。  
+若返回 WebUI，说明你的反向代理把该路径转发到了前端服务而不是 OpenClaw 网关。
+
+建议按顺序排查：
+1. 本机验证：`curl http://127.0.0.1:8885/wecom/callback`（应返回 `wecom webhook ok`）
+2. 公网验证：`curl -i https://你的域名/wecom/callback`
+3. 代理配置：为 `/wecom/*` 单独反代到 OpenClaw 网关端口，不要落到 WebUI 路由
+
+### Q6：自建应用群聊怎么开？为什么群里不 @ 就不触发？
+插件已支持群聊 `direct/mention/keyword` 三种触发模式。若你希望“群里直接发就触发”，配置：
+
+```json
+{
+  "channels": {
+    "wecom": {
+      "groupChat": {
+        "enabled": true,
+        "triggerMode": "direct"
+      }
+    }
+  }
+}
+```
+
+同时确认企业微信侧前提：
+1. 自建应用已开启“接收消息”并完成 URL 验证
+2. 应用可见范围包含该群成员
+3. 群里确实已添加该应用（不是只添加了另一个机器人）
+4. 日志里能看到 `chatId=...`（若没有 `chatId`，说明企业微信没有把群消息推送到该回调）
 
 ## 版本与贡献
 

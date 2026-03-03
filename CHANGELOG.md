@@ -32,6 +32,7 @@ All notable changes to this project will be documented in this file.
 - 远端 E2E 升级为矩阵模式：`wecom:remote:e2e` 支持 `--mode agent|bot|all`
 - `wecom:selfcheck` 增加命名 Webhook 目标校验与统计输出
 - 账户配置发现/归一化逻辑从 `src/index.js` 拆分到 `src/wecom/account-config.js`，降低主文件复杂度
+- 文档补充两类高频问题排查：`/wecom/callback` 返回 WebUI 路由误配、群聊 direct 模式前置条件
 
 ## [0.5.0] - 2026-03-02
 

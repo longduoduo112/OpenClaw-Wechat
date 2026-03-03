@@ -273,6 +273,7 @@ See [`docs/troubleshooting/coexistence.md`](./docs/troubleshooting/coexistence.m
 | Symptom | Check first | Typical root cause |
 |---|---|---|
 | Callback verification failed | callback URL reachability | URL/Token/AES mismatch |
+| `curl /wecom/callback` returns WebUI page | reverse-proxy path routing | `/wecom/*` path is forwarded to frontend/static site instead of OpenClaw gateway |
 | Inbound received but no reply | gateway logs + dispatch status | timeout, queueing, policy block |
 | Bot image parse failed | `wecom(bot): failed to fetch image url` | expired URL/non-image stream |
 | Voice transcription failed | local command/model path | whisper/ffmpeg environment issue |
@@ -311,3 +312,34 @@ WeCom image URLs can return non-standard content type or encrypted media stream.
 
 ### Can Telegram and WeCom affect each other?
 They are logically independent, but can conflict via shared webhook paths, multi-process gateway races, or loose plugin loading policy.
+
+### Why does `curl https://<domain>/wecom/callback` return WebUI instead of webhook health text?
+That is a routing issue. `GET /wecom/callback` (without `echostr`) should return plain text `wecom webhook ok`.
+If you get WebUI HTML, your reverse proxy is sending `/wecom/*` to frontend/static service.
+
+Quick checks:
+1. Local: `curl http://127.0.0.1:8885/wecom/callback`
+2. Public: `curl -i https://<domain>/wecom/callback`
+3. Proxy rules: route `/wecom/*` to OpenClaw gateway port, not WebUI.
+
+### How to enable self-built app group chat without requiring `@`?
+Set:
+
+```json
+{
+  "channels": {
+    "wecom": {
+      "groupChat": {
+        "enabled": true,
+        "triggerMode": "direct"
+      }
+    }
+  }
+}
+```
+
+And verify WeCom-side prerequisites:
+1. App callback is enabled and URL verification succeeded.
+2. App visibility includes group members.
+3. The group contains your self-built app (not only a webhook bot).
+4. Logs contain inbound `chatId=...`; otherwise WeCom is not pushing group messages to this callback.
