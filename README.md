@@ -106,7 +106,7 @@ npm run wecom:selfcheck -- --all-accounts
 |---|---|---|
 | 图片识别（入站） | ✅ | 支持 URL 下载、类型识别、必要时解密后识别 |
 | 图片发送（出站） | ✅ | Agent 模式支持 |
-| 视频/文件发送（出站） | ✅ | 自动判型上传后发送 |
+| 语音/视频/文件发送（出站） | ✅ | 自动判型上传后发送（语音支持 AMR/SILK） |
 | 语音转写（本地） | ✅ | 企业微信 Recognition 优先，缺失时回退本地 whisper |
 | Bot 模式媒体回传 | ✅ | `response_url` 优先 mixed；Webhook Bot fallback 支持 image/file 回传（失败自动降级链接） |
 | Bot 文件入站 | ✅ | 支持 `msgtype=file` 下载并注入会话上下文 |
@@ -121,7 +121,7 @@ npm run wecom:selfcheck -- --all-accounts
 | 回调路径默认值 | `/wecom/callback` | `/wecom/bot/callback` |
 | 回复机制 | 主动调用 WeCom 发送 API | 回调响应 `stream` + 轮询刷新 |
 | 流式体验 | 多条消息模拟增量 | 原生 stream 协议 |
-| 出站媒体（图/视频/文件） | 支持 | 支持（image/file 回传，video 自动按 file 回传） |
+| 出站媒体（图/语音/视频/文件） | 支持 | 支持（image/file 回传，video 自动按 file 回传） |
 | 典型场景 | 标准企业应用、菜单/回调体系 | 对话机器人、连续流式问答 |
 
 ### 回调路径规划建议
@@ -365,7 +365,7 @@ node ./scripts/wecom-bot-selfcheck.mjs --help
 |---|---|---|---|
 | 文本 | ✅ | ✅ | 自动分段 |
 | 图片 | ✅ | ✅ | 入站可识别，出站可发送 |
-| 语音 | ✅ | ❌ | 支持本地转写回退 |
+| 语音 | ✅ | ✅ | 入站支持本地转写回退；出站支持 AMR/SILK |
 | 视频 | ✅ | ✅ | 下载并可回包 |
 | 文件 | ✅ | ✅ | 下载并可回包 |
 | 链接 | ✅ | ❌ | 提取标题/描述/URL |

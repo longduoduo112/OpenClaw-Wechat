@@ -46,7 +46,7 @@ OpenClaw-Wechat is an OpenClaw channel plugin for Enterprise WeChat (WeCom), wit
 | Default callback path | `/wecom/callback` | `/wecom/bot/callback` |
 | Reply mechanism | WeCom send APIs | stream response + refresh polling |
 | Streaming UX | simulated via multiple messages | native stream protocol |
-| Outbound media | full support | image/file supported (`response_url` mixed first, webhook fallback) |
+| Outbound media | full support (image/voice/video/file) | image/file supported (`response_url` mixed first, webhook fallback) |
 
 ## 5-Minute Quick Start
 
@@ -176,7 +176,7 @@ openclaw plugins install @dingxiang-me/openclaw-wechat
 |---|---|---|
 | Text | ✅ | ✅ |
 | Image | ✅ | ✅ |
-| Voice | ✅ | ❌ (transcript as text) |
+| Voice | ✅ | ✅ (AMR/SILK) |
 | Video | ✅ | ✅ |
 | File | ✅ | ✅ |
 | Link | ✅ | ❌ |

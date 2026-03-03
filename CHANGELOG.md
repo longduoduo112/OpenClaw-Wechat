@@ -24,6 +24,7 @@ All notable changes to this project will be documented in this file.
 ### Changed
 - P3 模块化拆分第一步：Bot 回包链路从 `src/index.js` 抽离到独立模块（保持行为兼容）
 - Bot 模式媒体回传补齐：`response_url` mixed 优先，`webhook_bot` fallback 支持 `image/file` 回传（失败自动降级链接）
+- Agent 出站媒体补齐语音：支持 `mediaType=voice` 或 `.amr/.silk` 自动判型后上传并发送语音消息
 - 文档补充远端 E2E 指令（中英文 README + 渠道文档）
 - 文档补充 webhook/Bot 模式媒体回传能力说明（README/README.en/渠道文档）
 - Agent 最终回包支持媒体批量发送：可同时处理文本 + 媒体（含部分失败提示）

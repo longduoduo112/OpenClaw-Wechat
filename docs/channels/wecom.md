@@ -10,7 +10,7 @@ This channel integrates OpenClaw with WeCom (企业微信) internal apps.
 
 - Webhook verification: supported (requires Token + EncodingAESKey)
 - Inbound messages: text/image/voice/video/file/link (Bot quote context included)
-- Outbound: Agent mode supports text/image/video/file; Bot mode supports response_url mixed and webhook fallback media
+- Outbound: Agent mode supports text/image/voice/video/file; Bot mode supports response_url mixed and webhook fallback media
 - Local outbound media path: supported (`/abs/path`, `file://...`, `sandbox:/...`)
 - Outbound target: supports `user` / `group(chatid)` / `party(dept)` / `tag` / `webhook` (including named webhook targets)
 - Multi-account: supported (`channels.wecom.accounts`)

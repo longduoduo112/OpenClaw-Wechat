@@ -1455,6 +1455,41 @@ async function sendWecomFile({ corpId, corpSecret, agentId, toUser, toParty, toT
   });
 }
 
+// 发送语音消息（带限流）
+async function sendWecomVoice({ corpId, corpSecret, agentId, toUser, toParty, toTag, chatId, mediaId, logger, proxyUrl }) {
+  return apiLimiter.execute(async () => {
+    const accessToken = await getWecomAccessToken({ corpId, corpSecret, proxyUrl, logger });
+    const { sendUrl, body } = buildWecomMessageSendRequest({
+      accessToken,
+      agentId,
+      toUser,
+      toParty,
+      toTag,
+      chatId,
+      msgType: "voice",
+      payload: {
+        voice: { media_id: mediaId },
+      },
+    });
+    const sendRes = await fetchWithRetry(
+      sendUrl,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      },
+      3,
+      1000,
+      { proxyUrl, logger },
+    );
+    const sendJson = await sendRes.json();
+    if (sendJson?.errcode !== 0) {
+      throw new Error(`WeCom voice send failed: ${JSON.stringify(sendJson)}`);
+    }
+    return sendJson;
+  });
+}
+
 function resolveLocalMediaPath(mediaUrl) {
   const raw = String(mediaUrl ?? "").trim();
   if (!raw) return "";
@@ -1625,13 +1660,16 @@ function resolveWecomOutboundMediaTarget({ mediaUrl, mediaType }) {
 
   if (normalizedType === "image") return { type: "image", filename: inferredName || "image.jpg" };
   if (normalizedType === "video") return { type: "video", filename: inferredName || "video.mp4" };
+  if (normalizedType === "voice") return { type: "voice", filename: inferredName || "voice.amr" };
   if (normalizedType === "file") return { type: "file", filename: inferredName || "file.bin" };
 
   const imageExts = new Set(["jpg", "jpeg", "png", "gif", "bmp", "webp"]);
   const videoExts = new Set(["mp4", "mov", "m4v", "webm", "avi"]);
+  const voiceExts = new Set(["amr", "silk"]);
 
   if (imageExts.has(ext)) return { type: "image", filename: inferredName || `image.${ext}` };
   if (videoExts.has(ext)) return { type: "video", filename: inferredName || `video.${ext}` };
+  if (voiceExts.has(ext)) return { type: "voice", filename: inferredName || `voice.${ext}` };
   return { type: "file", filename: inferredName || "file.bin" };
 }
 
@@ -1765,7 +1803,7 @@ async function sendWecomOutboundMediaBatch({
       const mediaId = await uploadWecomMedia({
         corpId,
         corpSecret,
-        type: target.type,
+        type: target.type === "voice" ? "voice" : target.type,
         buffer,
         filename: target.filename,
         logger,
@@ -1786,6 +1824,19 @@ async function sendWecomOutboundMediaBatch({
         });
       } else if (target.type === "video") {
         await sendWecomVideo({
+          corpId,
+          corpSecret,
+          agentId,
+          toUser,
+          toParty,
+          toTag,
+          chatId,
+          mediaId,
+          logger,
+          proxyUrl,
+        });
+      } else if (target.type === "voice") {
+        await sendWecomVoice({
           corpId,
           corpSecret,
           agentId,
