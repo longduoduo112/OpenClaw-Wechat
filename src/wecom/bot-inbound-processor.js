@@ -1,5 +1,6 @@
 import { createWecomLateReplyWatcher } from "./agent-late-reply-watcher.js";
 import { buildWecomBotInboundContextPayload, buildWecomBotInboundEnvelopePayload } from "./bot-context.js";
+import { createWecomBotDispatchHandlers } from "./bot-dispatch-handlers.js";
 import { createWecomBotTranscriptFallbackReader } from "./bot-transcript-fallback.js";
 
 export function createWecomBotInboundProcessor(deps = {}) {
@@ -312,8 +313,10 @@ async function processBotInboundMessage({
       direction: "inbound",
     });
 
-    let blockText = "";
-    let streamFinished = false;
+    const dispatchState = {
+      blockText: "",
+      streamFinished: false,
+    };
     let lateReplyWatcherPromise = null;
     const replyTimeoutMs = Math.max(15000, Number(botModeConfig?.replyTimeoutMs) || 90000);
     const lateReplyWatchMs = Math.max(30000, Number(botModeConfig?.lateReplyWatchMs) || 180000);
@@ -342,17 +345,17 @@ async function processBotInboundMessage({
         minTimestamp,
       });
       if (!fallback.text) return false;
-      streamFinished = await safeDeliverReply(fallback.text, "transcript-fallback");
-      if (streamFinished && fallback.transcriptMessageId) {
+      dispatchState.streamFinished = await safeDeliverReply(fallback.text, "transcript-fallback");
+      if (dispatchState.streamFinished && fallback.transcriptMessageId) {
         markTranscriptReplyDelivered(sessionId, fallback.transcriptMessageId);
         api.logger.info?.(
           `wecom(bot): filled reply from transcript session=${sessionId} messageId=${fallback.transcriptMessageId}`,
         );
       }
-      return streamFinished;
+      return dispatchState.streamFinished;
     };
     startLateReplyWatcher = (reason = "dispatch-timeout", minTimestamp = dispatchStartedAt) => {
-      if (streamFinished || lateReplyWatcherPromise) return false;
+      if (dispatchState.streamFinished || lateReplyWatcherPromise) return false;
       const watchStartedAt = Date.now();
       const watchId = `wecom-bot:${sessionId}:${msgId || watchStartedAt}:${Math.random().toString(36).slice(2, 8)}`;
       const runLateReplyWatcher = ensureLateReplyWatcherRunner();
@@ -368,9 +371,9 @@ async function processBotInboundMessage({
         watchMs: lateReplyWatchMs,
         pollMs: lateReplyPollMs,
         activeWatchers: ACTIVE_LATE_REPLY_WATCHERS,
-        isDelivered: () => streamFinished,
+        isDelivered: () => dispatchState.streamFinished,
         markDelivered: () => {
-          streamFinished = true;
+          dispatchState.streamFinished = true;
         },
         sendText: async (text) => {
           const delivered = await safeDeliverReply(text, "late-transcript-fallback");
@@ -379,7 +382,7 @@ async function processBotInboundMessage({
           }
         },
         onFailureFallback: async (watchErr) => {
-          if (streamFinished) return;
+          if (dispatchState.streamFinished) return;
           const reasonText = String(watchErr?.message || watchErr || "");
           const isTimeout = reasonText.includes("timed out");
           await safeDeliverReply(
@@ -394,6 +397,18 @@ async function processBotInboundMessage({
       });
       return true;
     };
+    const dispatchHandlers = createWecomBotDispatchHandlers({
+      api,
+      streamId,
+      state: dispatchState,
+      hasBotStream,
+      normalizeWecomBotOutboundMediaUrls,
+      queueBotStreamMedia,
+      updateBotStream,
+      markdownToWecomText,
+      isAgentFailureText,
+      safeDeliverReply,
+    });
 
     await withTimeout(
       runtime.channel.reply.dispatchReplyWithBufferedBlockDispatcher({
@@ -411,70 +426,18 @@ async function processBotInboundMessage({
               : undefined,
         },
         dispatcherOptions: {
-          deliver: async (payload, info) => {
-            if (!hasBotStream(streamId)) return;
-            if (info.kind === "block") {
-              const blockMediaUrls = normalizeWecomBotOutboundMediaUrls(payload);
-              if (blockMediaUrls.length > 0) {
-                const blockMediaType = String(payload?.mediaType ?? "").trim().toLowerCase() || undefined;
-                for (const mediaUrl of blockMediaUrls) {
-                  queueBotStreamMedia(streamId, mediaUrl, { mediaType: blockMediaType });
-                }
-                api.logger.debug?.(
-                  `wecom(bot): queued block media stream=${streamId} count=${blockMediaUrls.length} type=${blockMediaType || "unknown"}`,
-                );
-              }
-              if (!payload?.text) return;
-              const incomingBlock = String(payload.text);
-              if (incomingBlock.startsWith(blockText)) {
-                blockText = incomingBlock;
-              } else if (!blockText.endsWith(incomingBlock)) {
-                blockText += incomingBlock;
-              }
-              updateBotStream(streamId, markdownToWecomText(blockText), { append: false, finished: false });
-              return;
-            }
-            if (info.kind !== "final") return;
-            if (payload?.text) {
-              if (isAgentFailureText(payload.text)) {
-                streamFinished = await safeDeliverReply(`抱歉，请求失败：${payload.text}`, "upstream-failure");
-                return;
-              }
-              const finalText = markdownToWecomText(payload.text).trim();
-              if (finalText) {
-                streamFinished = await safeDeliverReply(finalText, "final");
-                return;
-              }
-            }
-            if (payload?.mediaUrl || (payload?.mediaUrls?.length ?? 0) > 0) {
-              streamFinished = await safeDeliverReply(
-                {
-                  text: "已收到模型返回的媒体结果。",
-                  mediaUrl: payload.mediaUrl,
-                  mediaUrls: payload.mediaUrls,
-                },
-                "final-media",
-              );
-              return;
-            }
-          },
-          onError: async (err, info) => {
-            api.logger.error?.(`wecom(bot): ${info.kind} reply failed: ${String(err)}`);
-            streamFinished = await safeDeliverReply(
-              `抱歉，当前模型请求失败，请稍后重试。\n故障信息: ${String(err?.message || err).slice(0, 160)}`,
-              `dispatch-${info.kind}-error`,
-            );
-          },
+          deliver: dispatchHandlers.deliver,
+          onError: dispatchHandlers.onError,
         },
       }),
       replyTimeoutMs,
       `dispatch timed out after ${replyTimeoutMs}ms`,
     );
 
-    if (!streamFinished) {
+    if (!dispatchState.streamFinished) {
       const filledFromTranscript = await tryFinishFromTranscript(dispatchStartedAt);
       if (filledFromTranscript) return;
-      const fallback = markdownToWecomText(blockText).trim();
+      const fallback = markdownToWecomText(dispatchState.blockText).trim();
       if (fallback) {
         await safeDeliverReply(fallback, "block-fallback");
       } else {
