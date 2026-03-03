@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import { createWecomBotParsedDispatcher } from "./bot-webhook-dispatch.js";
 
 export function createWecomBotWebhookHandler({
   api,
@@ -23,6 +24,24 @@ export function createWecomBotWebhookHandler({
   deliverBotReplyText,
   finishBotStream,
 } = {}) {
+  const dispatchParsed = createWecomBotParsedDispatcher({
+    api,
+    botConfig,
+    cleanupExpiredBotStreams,
+    getBotStream,
+    buildWecomBotEncryptedResponse,
+    markInboundMessageSeen,
+    buildWecomBotSessionId,
+    createBotStream,
+    upsertBotResponseUrlCache,
+    messageProcessLimiter,
+    executeInboundTaskWithSessionQueue,
+    processBotInboundMessage,
+    deliverBotReplyText,
+    finishBotStream,
+    randomUuid: () => crypto.randomUUID?.(),
+  });
+
   return async (req, res) => {
     try {
       const url = new URL(req.url ?? "/", "http://localhost");
@@ -125,152 +144,13 @@ export function createWecomBotWebhookHandler({
 
       const parsed = parseWecomBotInboundMessage(incomingPayload);
       api.logger.info?.(`wecom(bot): inbound ${describeWecomBotParsedMessage(parsed)}`);
-      if (!parsed) {
-        res.statusCode = 200;
-        res.setHeader("Content-Type", "text/plain; charset=utf-8");
-        res.end("success");
-        return;
-      }
-
-      if (parsed.kind === "stream-refresh") {
-        cleanupExpiredBotStreams(botConfig.streamExpireMs);
-        const streamId = parsed.streamId || `stream-${Date.now()}`;
-        const stream = getBotStream(streamId);
-        const feedbackId = String(parsed.feedbackId || stream?.feedbackId || "").trim();
-        const streamPayload = {
-          id: streamId,
-          content: stream?.content ?? "会话已过期",
-          finish: stream ? stream.finished === true : true,
-        };
-        if (Array.isArray(stream?.msgItem) && stream.msgItem.length > 0) {
-          streamPayload.msg_item = stream.msgItem;
-        }
-        if (feedbackId) {
-          streamPayload.feedback = { id: feedbackId };
-        }
-        const plainPayload = {
-          msgtype: "stream",
-          stream: streamPayload,
-        };
-        const encryptedResponse = buildWecomBotEncryptedResponse({
-          token: botConfig.token,
-          aesKey: botConfig.encodingAesKey,
-          timestamp,
-          nonce,
-          plainPayload,
-        });
-        res.statusCode = 200;
-        res.setHeader("Content-Type", "application/json; charset=utf-8");
-        res.end(encryptedResponse);
-        return;
-      }
-
-      if (parsed.kind === "event") {
-        res.statusCode = 200;
-        res.setHeader("Content-Type", "text/plain; charset=utf-8");
-        res.end("success");
-        return;
-      }
-
-      if (parsed.kind === "unsupported" || parsed.kind === "invalid") {
-        res.statusCode = 200;
-        res.setHeader("Content-Type", "text/plain; charset=utf-8");
-        res.end("success");
-        return;
-      }
-
-      if (parsed.kind === "message") {
-        const dedupeStub = {
-          MsgId: parsed.msgId,
-          FromUserName: parsed.fromUser,
-          MsgType: parsed.msgType,
-          Content: parsed.content,
-          CreateTime: String(Math.floor(Date.now() / 1000)),
-        };
-        if (!markInboundMessageSeen(dedupeStub, "bot")) {
-          res.statusCode = 200;
-          res.setHeader("Content-Type", "text/plain; charset=utf-8");
-          res.end("success");
-          return;
-        }
-
-        const botSessionId = buildWecomBotSessionId(parsed.fromUser);
-        const streamId = `stream_${crypto.randomUUID?.() || `${Date.now()}_${Math.random().toString(36).slice(2, 10)}`}`;
-        const feedbackId = String(parsed.feedbackId ?? "").trim();
-        createBotStream(streamId, botConfig.placeholderText, {
-          feedbackId,
-          sessionId: botSessionId,
-        });
-        if (parsed.responseUrl) {
-          upsertBotResponseUrlCache({
-            sessionId: botSessionId,
-            responseUrl: parsed.responseUrl,
-          });
-        }
-        const initialStreamPayload = {
-          id: streamId,
-          content: botConfig.placeholderText,
-          finish: false,
-        };
-        if (feedbackId) {
-          initialStreamPayload.feedback = { id: feedbackId };
-        }
-        const encryptedResponse = buildWecomBotEncryptedResponse({
-          token: botConfig.token,
-          aesKey: botConfig.encodingAesKey,
-          timestamp,
-          nonce,
-          plainPayload: {
-            msgtype: "stream",
-            stream: initialStreamPayload,
-          },
-        });
-        res.statusCode = 200;
-        res.setHeader("Content-Type", "application/json; charset=utf-8");
-        res.end(encryptedResponse);
-
-        messageProcessLimiter
-          .execute(() =>
-            executeInboundTaskWithSessionQueue({
-              api,
-              sessionId: botSessionId,
-              isBot: true,
-              task: () =>
-                processBotInboundMessage({
-                  api,
-                  streamId,
-                  fromUser: parsed.fromUser,
-                  content: parsed.content,
-                  msgType: parsed.msgType,
-                  msgId: parsed.msgId,
-                  chatId: parsed.chatId,
-                  isGroupChat: parsed.isGroupChat,
-                  imageUrls: parsed.imageUrls,
-                  fileUrl: parsed.fileUrl,
-                  fileName: parsed.fileName,
-                  quote: parsed.quote,
-                  responseUrl: parsed.responseUrl,
-                }),
-            }),
-          )
-          .catch((err) => {
-            api.logger.error?.(`wecom(bot): async message processing failed: ${String(err?.message || err)}`);
-            deliverBotReplyText({
-              api,
-              fromUser: parsed.fromUser,
-              sessionId: botSessionId,
-              streamId,
-              responseUrl: parsed.responseUrl,
-              text: `抱歉，当前模型请求失败，请稍后重试。\n故障信息: ${String(err?.message || err).slice(0, 160)}`,
-              reason: "bot-async-processing-error",
-            }).catch((deliveryErr) => {
-              api.logger.warn?.(`wecom(bot): failed to deliver async error reply: ${String(deliveryErr?.message || deliveryErr)}`);
-              finishBotStream(
-                streamId,
-                `抱歉，当前模型请求失败，请稍后重试。\n故障信息: ${String(err?.message || err).slice(0, 160)}`,
-              );
-            });
-          });
+      const handled = await dispatchParsed({
+        parsed,
+        res,
+        timestamp,
+        nonce,
+      });
+      if (handled) {
         return;
       }
 
@@ -287,4 +167,3 @@ export function createWecomBotWebhookHandler({
     }
   };
 }
-
