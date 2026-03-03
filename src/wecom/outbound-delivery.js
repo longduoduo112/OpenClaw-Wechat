@@ -3,6 +3,7 @@ import { buildWecomBotMixedPayload, normalizeWecomBotOutboundMediaUrls } from ".
 import { resolveWecomOutboundMediaTarget } from "./media-url-utils.js";
 import { createWecomActiveStreamDeliverer } from "./outbound-active-stream.js";
 import { createWecomResponseUrlSender } from "./outbound-response-url.js";
+import { createWecomWebhookBotDeliverer } from "./outbound-webhook-delivery.js";
 import { createWecomWebhookBotMediaSender } from "./outbound-webhook-media.js";
 import { buildActiveStreamMsgItems } from "./outbound-stream-msg-item.js";
 import {
@@ -64,11 +65,6 @@ export function createWecomBotReplyDeliverer({
   assertFunction("webhookSendImageFn", webhookSendImageFn);
   assertFunction("webhookSendFileBufferFn", webhookSendFileBufferFn);
 
-  function resolveWebhookDispatcher(url, proxyUrl, logger) {
-    const options = attachWecomProxyDispatcher(url, {}, { proxyUrl, logger });
-    return options?.dispatcher;
-  }
-
   const sendWebhookBotMediaBatch = createWecomWebhookBotMediaSender({
     resolveWebhookBotSendUrl: resolveWebhookBotSendUrlFn,
     resolveWecomOutboundMediaTarget,
@@ -91,6 +87,13 @@ export function createWecomBotReplyDeliverer({
     buildActiveStreamMsgItems,
     finishBotStream,
     fetchMediaFromUrl,
+  });
+  const deliverWebhookBotReply = createWecomWebhookBotDeliverer({
+    attachWecomProxyDispatcher,
+    resolveWebhookBotSendUrl: resolveWebhookBotSendUrlFn,
+    webhookSendText: webhookSendTextFn,
+    sendWebhookBotMediaBatch,
+    fetchImpl,
   });
 
   async function deliverBotReplyText({
@@ -178,67 +181,16 @@ export function createWecomBotReplyDeliverer({
           };
         },
         webhook_bot: async ({ text: content }) => {
-          if (!webhookBotPolicy.enabled) {
-            return { ok: false, reason: "webhook-bot-disabled" };
-          }
-          const sendUrl = resolveWebhookBotSendUrlFn({
-            url: webhookBotPolicy.url,
-            key: webhookBotPolicy.key,
+          return deliverWebhookBotReply({
+            api,
+            webhookBotPolicy,
+            botProxyUrl,
+            content,
+            fallbackText,
+            normalizedText,
+            normalizedMediaUrls,
+            mediaType,
           });
-          if (!sendUrl) {
-            return { ok: false, reason: "webhook-bot-url-missing" };
-          }
-
-          const dispatcher = resolveWebhookDispatcher(sendUrl, botProxyUrl, api.logger);
-          const textPayload = `${content || fallbackText}`.trim();
-          let sentAny = false;
-
-          if (textPayload && (normalizedText || normalizedMediaUrls.length === 0)) {
-            await webhookSendTextFn({
-              url: webhookBotPolicy.url,
-              key: webhookBotPolicy.key,
-              content: textPayload,
-              timeoutMs: webhookBotPolicy.timeoutMs,
-              dispatcher,
-              fetchImpl,
-            });
-            sentAny = true;
-          }
-
-          let mediaMeta = { sentCount: 0, failedCount: 0, failedUrls: [] };
-          if (normalizedMediaUrls.length > 0) {
-            mediaMeta = await sendWebhookBotMediaBatch({
-              api,
-              webhookBotPolicy,
-              proxyUrl: botProxyUrl,
-              mediaUrls: normalizedMediaUrls,
-              mediaType,
-            });
-            sentAny = sentAny || mediaMeta.sentCount > 0;
-          }
-
-          if (!sentAny) {
-            return { ok: false, reason: mediaMeta.reason || "webhook-bot-send-failed" };
-          }
-
-          if (mediaMeta.failedCount > 0) {
-            await webhookSendTextFn({
-              url: webhookBotPolicy.url,
-              key: webhookBotPolicy.key,
-              content: `以下媒体回传失败，已自动降级为链接：\n${mediaMeta.failedUrls.join("\n")}`,
-              timeoutMs: webhookBotPolicy.timeoutMs,
-              dispatcher,
-              fetchImpl,
-            });
-          }
-
-          return {
-            ok: true,
-            meta: {
-              mediaSent: mediaMeta.sentCount,
-              mediaFailed: mediaMeta.failedCount,
-            },
-          };
         },
         agent_push: async ({ text: content }) => {
           const account = getWecomConfig(api, "default") ?? getWecomConfig(api);
