@@ -1,5 +1,6 @@
 import { createWecomLateReplyWatcher } from "./agent-late-reply-watcher.js";
 import { buildWecomBotInboundContextPayload, buildWecomBotInboundEnvelopePayload } from "./bot-context.js";
+import { createWecomBotTranscriptFallbackReader } from "./bot-transcript-fallback.js";
 
 export function createWecomBotInboundProcessor(deps = {}) {
   const {
@@ -41,6 +42,7 @@ export function createWecomBotInboundProcessor(deps = {}) {
   } = deps;
 
   let lateReplyWatcherRunner = null;
+  let transcriptFallbackReader = null;
   function ensureLateReplyWatcherRunner() {
     if (lateReplyWatcherRunner) return lateReplyWatcherRunner;
     lateReplyWatcherRunner = createWecomLateReplyWatcher({
@@ -53,6 +55,17 @@ export function createWecomBotInboundProcessor(deps = {}) {
       markdownToWecomText,
     });
     return lateReplyWatcherRunner;
+  }
+  function ensureTranscriptFallbackReader() {
+    if (transcriptFallbackReader) return transcriptFallbackReader;
+    transcriptFallbackReader = createWecomBotTranscriptFallbackReader({
+      resolveSessionTranscriptFilePath,
+      readTranscriptAppendedChunk,
+      parseLateAssistantReplyFromTranscriptLine,
+      hasTranscriptReplyBeenDelivered,
+      markdownToWecomText,
+    });
+    return transcriptFallbackReader;
   }
 
 async function processBotInboundMessage({
@@ -305,45 +318,24 @@ async function processBotInboundMessage({
     const replyTimeoutMs = Math.max(15000, Number(botModeConfig?.replyTimeoutMs) || 90000);
     const lateReplyWatchMs = Math.max(30000, Number(botModeConfig?.lateReplyWatchMs) || 180000);
     const lateReplyPollMs = Math.max(500, Number(botModeConfig?.lateReplyPollMs) || 2000);
-    const readTranscriptFallback = async ({
+    const readTranscriptFallback = ensureTranscriptFallbackReader();
+    const readTranscriptFallbackResult = async ({
       runtimeStorePath = storePath,
       runtimeSessionId = sessionId,
       runtimeTranscriptSessionId = sessionRuntimeId || sessionId,
       minTimestamp = dispatchStartedAt,
       logErrors = true,
-    } = {}) => {
-      try {
-        const transcriptPath = await resolveSessionTranscriptFilePath({
-          storePath: runtimeStorePath,
-          sessionKey: runtimeSessionId,
-          sessionId: runtimeTranscriptSessionId,
-          logger: api.logger,
-        });
-        const { chunk } = await readTranscriptAppendedChunk(transcriptPath, 0);
-        if (!chunk) return { text: "", transcriptMessageId: "" };
-        const lines = chunk.split("\n");
-        let latestReply = null;
-        for (const line of lines) {
-          const parsedReply = parseLateAssistantReplyFromTranscriptLine(line, minTimestamp);
-          if (!parsedReply) continue;
-          if (hasTranscriptReplyBeenDelivered(runtimeSessionId, parsedReply.transcriptMessageId)) continue;
-          latestReply = parsedReply;
-        }
-        const text = latestReply?.text ? markdownToWecomText(latestReply.text).trim() : "";
-        if (!text) return { text: "", transcriptMessageId: "" };
-        return {
-          text,
-          transcriptMessageId: String(latestReply?.transcriptMessageId ?? "").trim(),
-        };
-      } catch (err) {
-        if (logErrors) {
-          api.logger.warn?.(`wecom(bot): transcript fallback failed: ${String(err?.message || err)}`);
-        }
-        return { text: "", transcriptMessageId: "" };
-      }
-    };
+    } = {}) =>
+      readTranscriptFallback({
+        storePath: runtimeStorePath,
+        sessionId: runtimeSessionId,
+        transcriptSessionId: runtimeTranscriptSessionId,
+        minTimestamp,
+        logger: api.logger,
+        logErrors,
+      });
     const tryFinishFromTranscript = async (minTimestamp = dispatchStartedAt) => {
-      const fallback = await readTranscriptFallback({
+      const fallback = await readTranscriptFallbackResult({
         runtimeStorePath: storePath,
         runtimeSessionId: sessionId,
         runtimeTranscriptSessionId: sessionRuntimeId || sessionId,
@@ -511,7 +503,7 @@ async function processBotInboundMessage({
       const runtimeStorePath = runtime.channel.session.resolveStorePath(cfg.session?.store, {
         agentId: routedAgentId || "main",
       });
-      const fallbackFromTranscript = await readTranscriptFallback({
+      const fallbackFromTranscript = await readTranscriptFallbackResult({
         runtimeStorePath,
         runtimeSessionId,
         runtimeTranscriptSessionId: runtimeSessionId,
