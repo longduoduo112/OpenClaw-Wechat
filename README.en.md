@@ -142,6 +142,8 @@ openclaw plugins install @dingxiang-me/openclaw-wechat
 | `webhooks` | object | - | named webhook target map (`{ "ops": "https://...key=xxx" }`) |
 | `accounts` | object | - | multi-account map |
 
+Compatibility note: legacy Agent keys `token` / `encodingAesKey` are still accepted (mapped to `callbackToken` / `callbackAesKey`). Prefer the new names for new configs.
+
 ### Bot config (`channels.wecom.bot`)
 
 | Key | Type | Default | Notes |

@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.4.1] - 2026-03-03
+
+### Added
+- 新增配置兼容测试：`tests/wecom-account-config-core.test.mjs`，覆盖旧字段与新字段映射行为
+- 自检脚本新增本地 webhook 健康诊断提示（`html-fallback` / `route-not-found` / `gateway-unreachable`）
+
+### Changed
+- Agent 账户配置兼容旧字段：`token` / `encodingAesKey` 自动映射到 `callbackToken` / `callbackAesKey`
+- `wecom:selfcheck` 与 `wecom:agent:selfcheck` 同步支持旧字段读取，并输出更明确的失败原因
+- `openclaw.plugin.json` schema 增加旧字段兼容声明，避免升级后被严格校验拦截
+
+### Fixed
+- 修复旧配置字段在新版本下可能导致 webhook 路由未注册、健康探针返回 WebUI HTML 的兼容性问题
+
 ## [1.4.0] - 2026-03-03
 
 ### Added

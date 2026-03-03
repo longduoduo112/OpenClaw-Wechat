@@ -274,6 +274,8 @@ node ./scripts/wecom-bot-selfcheck.mjs --help
 | `webhooks` | object | - | 命名 Webhook 目标映射（如 `{ "ops": "https://...key=xxx" }`） |
 | `accounts` | object | - | 多账户配置 |
 
+兼容说明：旧字段 `token` / `encodingAesKey` 仍可用于 Agent 模式（分别等价于 `callbackToken` / `callbackAesKey`），建议逐步迁移到新字段名。
+
 ### Bot 配置（`channels.wecom.bot`）
 
 | 键 | 类型 | 默认 | 说明 |

@@ -17,6 +17,14 @@ export function normalizeAccountId(accountId) {
   return normalized || "default";
 }
 
+function pickFirstNonEmptyString(...values) {
+  for (const value of values) {
+    const trimmed = String(value ?? "").trim();
+    if (trimmed) return trimmed;
+  }
+  return "";
+}
+
 export function normalizeAccountConfig({ raw, accountId, normalizeWecomWebhookTargetMap } = {}) {
   const normalizedId = normalizeAccountId(accountId);
   if (!raw || typeof raw !== "object") return null;
@@ -25,8 +33,8 @@ export function normalizeAccountConfig({ raw, accountId, normalizeWecomWebhookTa
   const corpId = String(raw.corpId ?? "").trim();
   const corpSecret = String(raw.corpSecret ?? "").trim();
   const agentId = asNumber(raw.agentId);
-  const callbackToken = String(raw.callbackToken ?? "").trim();
-  const callbackAesKey = String(raw.callbackAesKey ?? "").trim();
+  const callbackToken = pickFirstNonEmptyString(raw.callbackToken, raw.token);
+  const callbackAesKey = pickFirstNonEmptyString(raw.callbackAesKey, raw.encodingAesKey);
   const webhookPath = String(raw.webhookPath ?? "/wecom/callback").trim() || "/wecom/callback";
   const outboundProxy = String(raw.outboundProxy ?? raw.proxyUrl ?? raw.proxy ?? "").trim();
   const webhooks = normalizeWecomWebhookTargetMap(raw.webhooks);
@@ -74,8 +82,8 @@ export function readAccountConfigFromEnv({
   const corpId = String(readVar("CORP_ID") ?? "").trim();
   const corpSecret = String(readVar("CORP_SECRET") ?? "").trim();
   const agentId = asNumber(readVar("AGENT_ID"));
-  const callbackToken = String(readVar("CALLBACK_TOKEN") ?? "").trim();
-  const callbackAesKey = String(readVar("CALLBACK_AES_KEY") ?? "").trim();
+  const callbackToken = pickFirstNonEmptyString(readVar("CALLBACK_TOKEN"), readVar("TOKEN"));
+  const callbackAesKey = pickFirstNonEmptyString(readVar("CALLBACK_AES_KEY"), readVar("ENCODING_AES_KEY"));
   const webhookPath = String(readVar("WEBHOOK_PATH") ?? "/wecom/callback").trim() || "/wecom/callback";
   const outboundProxyRaw =
     readVar("PROXY") ??

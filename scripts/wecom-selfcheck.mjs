@@ -86,6 +86,14 @@ function asNumber(v, fallback = null) {
   return Number.isFinite(n) ? n : fallback;
 }
 
+function pickFirstNonEmptyString(...values) {
+  for (const value of values) {
+    const trimmed = String(value ?? "").trim();
+    if (trimmed) return trimmed;
+  }
+  return "";
+}
+
 function decodeAesKey(aesKey) {
   if (!aesKey) return null;
   const base64 = aesKey.endsWith("=") ? aesKey : `${aesKey}=`;
@@ -360,8 +368,8 @@ function readAccountConfigFromEnv(envVars, accountId) {
   const corpId = String(readVar("CORP_ID") ?? "").trim();
   const corpSecret = String(readVar("CORP_SECRET") ?? "").trim();
   const agentId = asNumber(readVar("AGENT_ID"));
-  const callbackToken = String(readVar("CALLBACK_TOKEN") ?? "").trim();
-  const callbackAesKey = String(readVar("CALLBACK_AES_KEY") ?? "").trim();
+  const callbackToken = pickFirstNonEmptyString(readVar("CALLBACK_TOKEN"), readVar("TOKEN"));
+  const callbackAesKey = pickFirstNonEmptyString(readVar("CALLBACK_AES_KEY"), readVar("ENCODING_AES_KEY"));
   const webhookPath = String(readVar("WEBHOOK_PATH") ?? "/wecom/callback").trim() || "/wecom/callback";
   const webhooks = normalizeWebhookTargetMap(readVar("WEBHOOK_TARGETS"), readVar("WEBHOOKS"));
   const outboundProxy = String(
@@ -395,8 +403,8 @@ function normalizeResolvedAccount(raw, accountId, source) {
   const corpId = String(raw.corpId ?? "").trim();
   const corpSecret = String(raw.corpSecret ?? "").trim();
   const agentId = asNumber(raw.agentId);
-  const callbackToken = String(raw.callbackToken ?? "").trim();
-  const callbackAesKey = String(raw.callbackAesKey ?? "").trim();
+  const callbackToken = pickFirstNonEmptyString(raw.callbackToken, raw.token);
+  const callbackAesKey = pickFirstNonEmptyString(raw.callbackAesKey, raw.encodingAesKey);
   const webhookPath = String(raw.webhookPath ?? "/wecom/callback").trim() || "/wecom/callback";
   const webhooks = normalizeWebhookTargetMap(raw.webhooks);
   const outboundProxy = String(raw.outboundProxy ?? raw.proxyUrl ?? raw.proxy ?? "").trim();
@@ -534,6 +542,47 @@ async function fetchJsonWithTimeout(url, timeoutMs, proxyUrl = "") {
   } finally {
     clearTimeout(timer);
   }
+}
+
+function diagnoseLocalWebhookHealth({ status, raw, webhookPath, gatewayPort }) {
+  const body = String(raw ?? "");
+  const preview = body.slice(0, 120);
+  const normalizedBody = body.trim().toLowerCase();
+  const healthy = status === 200 && normalizedBody.includes("wecom webhook");
+  if (healthy) {
+    return {
+      ok: true,
+      detail: `status=${status} body=${preview}`,
+      data: null,
+    };
+  }
+
+  let reason = "unexpected-response";
+  const hints = [];
+  if (status === 404) {
+    reason = "route-not-found";
+    hints.push(`路径 ${webhookPath} 未命中插件路由`);
+  } else if (status === 502 || status === 503 || status === 504) {
+    reason = "gateway-unreachable";
+    hints.push(`网关 ${gatewayPort} 端口不可达或反向代理后端异常`);
+  } else if (status === 200 && /<!doctype html|<html/i.test(body)) {
+    reason = "html-fallback";
+    hints.push("返回了 WebUI HTML，通常表示 webhook 路由未注册或 webhookPath 配置不一致");
+    hints.push(`请确认 channels.wecom.webhookPath=${webhookPath} 与企业微信后台回调地址完全一致`);
+    hints.push("确认插件已加载：plugins.entries.openclaw-wechat.enabled=true 且 plugins.allow 包含 openclaw-wechat");
+  }
+
+  return {
+    ok: false,
+    detail: `status=${status} body=${preview}${hints.length > 0 ? ` hint=${hints.join("；")}` : ""}`,
+    data: {
+      status,
+      reason,
+      webhookPath,
+      gatewayPort,
+      hints,
+    },
+  };
 }
 
 async function runAccountChecks({ config, accountId, args }) {
@@ -689,12 +738,18 @@ async function runAccountChecks({ config, accountId, args }) {
     try {
       const resp = await fetchJsonWithTimeout(localWebhookUrl, Math.min(args.timeoutMs, 4000));
       const raw = resp.json?.raw ?? "";
-      const healthy = resp.status === 200 && String(raw).includes("wecom webhook");
+      const diagnosed = diagnoseLocalWebhookHealth({
+        status: resp.status,
+        raw,
+        webhookPath,
+        gatewayPort,
+      });
       checks.push(
         makeCheck(
           "local.webhook.health",
-          healthy,
-          `status=${resp.status} body=${String(raw).slice(0, 120)}`,
+          diagnosed.ok,
+          diagnosed.detail,
+          diagnosed.data,
         ),
       );
     } catch (err) {

@@ -1,7 +1,7 @@
 {
   "id": "openclaw-wechat",
   "name": "OpenClaw-Wechat",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "description": "WeCom (企业微信) channel plugin for OpenClaw (自建应用回调 + 发送 API).",
   "channels": [
     "wecom"
@@ -47,10 +47,22 @@
         "description": "回调 Token",
         "x-sensitive": true
       },
+      "token": {
+        "type": "string",
+        "minLength": 1,
+        "description": "兼容旧配置：等价 callbackToken（不推荐新配置继续使用）",
+        "x-sensitive": true
+      },
       "callbackAesKey": {
         "type": "string",
         "minLength": 1,
         "description": "回调 AES Key",
+        "x-sensitive": true
+      },
+      "encodingAesKey": {
+        "type": "string",
+        "minLength": 1,
+        "description": "兼容旧配置：等价 callbackAesKey（不推荐新配置继续使用）",
         "x-sensitive": true
       },
       "webhookPath": {
@@ -605,9 +617,21 @@
               "minLength": 1,
               "x-sensitive": true
             },
+            "token": {
+              "type": "string",
+              "minLength": 1,
+              "description": "兼容旧配置：等价 callbackToken",
+              "x-sensitive": true
+            },
             "callbackAesKey": {
               "type": "string",
               "minLength": 1,
+              "x-sensitive": true
+            },
+            "encodingAesKey": {
+              "type": "string",
+              "minLength": 1,
+              "description": "兼容旧配置：等价 callbackAesKey",
               "x-sensitive": true
             },
             "webhookPath": {
@@ -655,7 +679,13 @@
     "callbackToken": {
       "sensitive": true
     },
+    "token": {
+      "sensitive": true
+    },
     "callbackAesKey": {
+      "sensitive": true
+    },
+    "encodingAesKey": {
       "sensitive": true
     },
     "bot.token": {

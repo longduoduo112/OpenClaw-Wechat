@@ -168,6 +168,44 @@ function makeCheck(name, ok, detail, data = null) {
   return { name, ok: Boolean(ok), detail: String(detail ?? ""), data };
 }
 
+function diagnoseLocalHealthResponse({ status, body, endpoint }) {
+  const raw = String(body ?? "");
+  const preview = raw.slice(0, 120);
+  const healthy = status === 200 && raw.toLowerCase().includes("wecom webhook");
+  if (healthy) {
+    return {
+      ok: true,
+      detail: `status=${status} body=${preview}`,
+      data: null,
+    };
+  }
+
+  const hints = [];
+  let reason = "unexpected-response";
+  if (status === 404) {
+    reason = "route-not-found";
+    hints.push("回调路径未命中插件路由");
+  } else if (status === 502 || status === 503 || status === 504) {
+    reason = "gateway-unreachable";
+    hints.push("网关端口不可达或反向代理后端异常");
+  } else if (status === 200 && /<!doctype html|<html/i.test(raw)) {
+    reason = "html-fallback";
+    hints.push("返回 WebUI HTML，通常表示 webhook 路由未注册或 webhookPath 配置不一致");
+    hints.push("确认 plugins.entries.openclaw-wechat.enabled=true 且 plugins.allow 包含 openclaw-wechat");
+  }
+
+  return {
+    ok: false,
+    detail: `status=${status} body=${preview}${hints.length > 0 ? ` hint=${hints.join("；")}` : ""}`,
+    data: {
+      endpoint,
+      status,
+      reason,
+      hints,
+    },
+  };
+}
+
 function summarize(checks) {
   const failed = checks.filter((c) => !c.ok).length;
   return {
@@ -188,8 +226,8 @@ function resolveAccountFromConfig(config, accountId) {
     const corpId = String(raw.corpId ?? "").trim();
     const corpSecret = String(raw.corpSecret ?? "").trim();
     const agentId = asNumber(raw.agentId);
-    const callbackToken = String(raw.callbackToken ?? "").trim();
-    const callbackAesKey = String(raw.callbackAesKey ?? "").trim();
+    const callbackToken = pickFirstNonEmptyString(raw.callbackToken, raw.token);
+    const callbackAesKey = pickFirstNonEmptyString(raw.callbackAesKey, raw.encodingAesKey);
     const webhookPath = pickFirstNonEmptyString(raw.webhookPath, "/wecom/callback");
     const enabled = raw.enabled !== false;
     if (!corpId || !corpSecret || !agentId) return null;
@@ -218,8 +256,8 @@ function resolveAccountFromConfig(config, accountId) {
     const corpId = String(readVar("CORP_ID") ?? "").trim();
     const corpSecret = String(readVar("CORP_SECRET") ?? "").trim();
     const agentId = asNumber(readVar("AGENT_ID"));
-    const callbackToken = String(readVar("CALLBACK_TOKEN") ?? "").trim();
-    const callbackAesKey = String(readVar("CALLBACK_AES_KEY") ?? "").trim();
+    const callbackToken = pickFirstNonEmptyString(readVar("CALLBACK_TOKEN"), readVar("TOKEN"));
+    const callbackAesKey = pickFirstNonEmptyString(readVar("CALLBACK_AES_KEY"), readVar("ENCODING_AES_KEY"));
     const webhookPath = pickFirstNonEmptyString(readVar("WEBHOOK_PATH"), "/wecom/callback");
     const enabled = !isFalseLike(readVar("ENABLED"));
     if (!corpId || !corpSecret || !agentId) return null;
@@ -341,12 +379,17 @@ async function runAgentE2E({ config, args, configPath }) {
   try {
     const healthResponse = await fetchWithTimeout(endpoint, { method: "GET" }, Math.min(args.timeoutMs, 4000));
     const healthBody = await healthResponse.text();
-    const healthy = healthResponse.status === 200 && healthBody.includes("wecom webhook");
+    const diagnosis = diagnoseLocalHealthResponse({
+      status: healthResponse.status,
+      body: healthBody,
+      endpoint,
+    });
     checks.push(
       makeCheck(
         "e2e.health.get",
-        healthy,
-        `status=${healthResponse.status} body=${healthBody.slice(0, 120)}`,
+        diagnosis.ok,
+        diagnosis.detail,
+        diagnosis.data,
       ),
     );
   } catch (err) {
