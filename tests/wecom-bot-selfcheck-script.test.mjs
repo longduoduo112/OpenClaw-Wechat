@@ -208,3 +208,66 @@ test("wecom-bot-selfcheck performs URL verify check", async (t) => {
   assert.ok(verifyCheck);
   assert.equal(verifyCheck.ok, true);
 });
+
+test("wecom-bot-selfcheck reports html-fallback hint on webhook health", async (t) => {
+  const token = "bot-selfcheck-token";
+  const aesKey = Buffer.alloc(32, 9).toString("base64").replace(/=+$/g, "");
+  const htmlBody = "<!doctype html><html><body>web ui</body></html>";
+  const server = createServer((req, res) => {
+    if (req.method === "GET") {
+      res.statusCode = 200;
+      res.setHeader("Content-Type", "text/html; charset=utf-8");
+      res.end(htmlBody);
+      return;
+    }
+    res.statusCode = 500;
+    res.end("mock post failure");
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  t.after(() => server.close());
+  const address = server.address();
+  const port = typeof address === "object" && address ? address.port : 0;
+  assert.ok(port > 0);
+
+  const tempDir = await mkdtemp(path.join(os.tmpdir(), "wecom-bot-selfcheck-"));
+  const configPath = path.join(tempDir, "openclaw.json");
+  const config = {
+    gateway: { port },
+    plugins: {
+      allow: ["openclaw-wechat"],
+      entries: {
+        "openclaw-wechat": { enabled: true },
+      },
+    },
+    channels: {
+      wecom: {
+        bot: {
+          enabled: true,
+          token,
+          encodingAesKey: aesKey,
+          webhookPath: "/wecom/bot/callback",
+        },
+      },
+    },
+  };
+  await writeFile(configPath, `${JSON.stringify(config, null, 2)}\n`, "utf8");
+
+  const result = await runBotSelfcheck([
+    "--config",
+    configPath,
+    "--url",
+    `http://127.0.0.1:${port}/wecom/bot/callback`,
+    "--poll-count",
+    "1",
+    "--poll-interval-ms",
+    "10",
+    "--json",
+  ]);
+  assert.equal(result.code, 1);
+  const report = JSON.parse(result.stdout);
+  const accountReport = report?.accounts?.[0];
+  const healthCheck = accountReport?.checks?.find((item) => item?.name === "local.webhook.health");
+  assert.ok(healthCheck);
+  assert.equal(healthCheck.ok, false);
+  assert.equal(healthCheck?.data?.reason, "html-fallback");
+});
