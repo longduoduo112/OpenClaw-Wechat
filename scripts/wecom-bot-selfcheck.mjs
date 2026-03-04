@@ -8,6 +8,7 @@ import path from "node:path";
 function parseArgs(argv) {
   const out = {
     account: "default",
+    allAccounts: false,
     configPath: process.env.OPENCLAW_CONFIG_PATH || "~/.openclaw/openclaw.json",
     url: "",
     fromUser: "",
@@ -24,6 +25,8 @@ function parseArgs(argv) {
     if (arg === "--account" && next) {
       out.account = normalizeAccountId(next);
       i += 1;
+    } else if (arg === "--all-accounts") {
+      out.allAccounts = true;
     } else if (arg === "--config" && next) {
       out.configPath = next;
       i += 1;
@@ -69,6 +72,7 @@ Usage:
 
 Options:
   --account <id>            Bot account id (default: default)
+  --all-accounts            Run checks for all discovered Bot accounts
   --config <path>            OpenClaw config path (default: ~/.openclaw/openclaw.json)
   --url <http-url>           Override Bot callback URL
   --from-user <userid>       Simulated sender (default: auto-generated)
@@ -208,8 +212,50 @@ function summarize(checks) {
   };
 }
 
+function summarizeAccountReports(accountReports = []) {
+  const checks = accountReports.flatMap((report) => (Array.isArray(report?.checks) ? report.checks : []));
+  const accountsFailed = accountReports.filter((report) => report?.summary?.ok !== true).length;
+  return {
+    ...summarize(checks),
+    accountsTotal: accountReports.length,
+    accountsPassed: accountReports.length - accountsFailed,
+    accountsFailed,
+  };
+}
+
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function discoverBotAccountIds(config) {
+  const accountIds = new Set(["default"]);
+  const channelConfig = config?.channels?.wecom;
+  const accountEntries = channelConfig?.accounts;
+  if (accountEntries && typeof accountEntries === "object") {
+    for (const accountId of Object.keys(accountEntries)) {
+      accountIds.add(normalizeAccountId(accountId));
+    }
+  }
+
+  const scopedBotRegex =
+    /^WECOM_([A-Z0-9]+)_BOT_(ENABLED|TOKEN|ENCODING_AES_KEY|WEBHOOK_PATH|PLACEHOLDER_TEXT|STREAM_EXPIRE_MS|REPLY_TIMEOUT_MS|LATE_REPLY_WATCH_MS|LATE_REPLY_POLL_MS)$/;
+  const collectFromEnv = (obj) => {
+    if (!obj || typeof obj !== "object") return;
+    for (const key of Object.keys(obj)) {
+      const match = String(key ?? "").match(scopedBotRegex);
+      if (!match) continue;
+      const accountId = normalizeAccountId(match[1]);
+      if (accountId) accountIds.add(accountId);
+    }
+  };
+  collectFromEnv(config?.env?.vars);
+  collectFromEnv(process.env);
+
+  return Array.from(accountIds).sort((a, b) => {
+    if (a === "default" && b !== "default") return -1;
+    if (a !== "default" && b === "default") return 1;
+    return a.localeCompare(b);
+  });
 }
 
 function resolveBotConfig(config) {
@@ -347,28 +393,43 @@ function reportAndExit(report, asJson = false) {
     process.exit(report.summary.ok ? 0 : 1);
     return;
   }
+
+  const accountReports =
+    Array.isArray(report?.accounts) && report.accounts.length > 0 ? report.accounts : [report];
+
   console.log("WeCom Bot E2E selfcheck");
   console.log(`- config: ${report.configPath}`);
-  console.log(`- account: ${report.account}`);
-  console.log(`- endpoint: ${report.endpoint}`);
-  console.log(`- fromUser: ${report.fromUser}`);
-  console.log(`- content: ${report.content}`);
-  for (const check of report.checks) {
-    console.log(`${check.ok ? "OK " : "FAIL"} ${check.name} :: ${check.detail}`);
+  console.log(`- mode: ${report.args?.allAccounts ? "all-accounts" : `single-account (${report.args?.account || "default"})`}`);
+  for (const accountReport of accountReports) {
+    console.log(`\nAccount: ${accountReport.account}`);
+    console.log(`- endpoint: ${accountReport.endpoint}`);
+    console.log(`- fromUser: ${accountReport.fromUser}`);
+    console.log(`- content: ${accountReport.content}`);
+    for (const check of accountReport.checks) {
+      console.log(`${check.ok ? "OK " : "FAIL"} ${check.name} :: ${check.detail}`);
+    }
+    console.log(`Account summary: ${accountReport.summary.passed}/${accountReport.summary.total} passed`);
   }
-  console.log(`Summary: ${report.summary.passed}/${report.summary.total} passed`);
+  if (report.summary?.accountsTotal != null) {
+    console.log(
+      `\nSummary: accounts ${report.summary.accountsPassed}/${report.summary.accountsTotal} passed, checks ${report.summary.passed}/${report.summary.total} passed`,
+    );
+  } else {
+    console.log(`\nSummary: ${report.summary.passed}/${report.summary.total} passed`);
+  }
   process.exit(report.summary.ok ? 0 : 1);
 }
 
-async function runBotE2E({ config, args, configPath }) {
+async function runBotE2E({ config, args, configPath, accountId }) {
   const checks = [];
   const botConfig = resolveBotConfig({
     ...config,
-    accountId: args.account,
+    accountId,
   });
   const endpoint = buildCallbackUrl({ args, botConfig });
   const fromUser =
-    String(args.fromUser ?? "").trim() || `DxBotSelfCheck${Date.now().toString(36).slice(-6)}`;
+    String(args.fromUser ?? "").trim() ||
+    `DxBotSelfCheck${botConfig.accountId.replace(/[^a-z0-9]/gi, "").slice(0, 12)}${Date.now().toString(36).slice(-6)}`;
   const content = String(args.content ?? "").trim() || "/status";
 
   checks.push(
@@ -569,12 +630,15 @@ async function runBotE2E({ config, args, configPath }) {
 async function main() {
   const args = parseArgs(process.argv);
   const configPath = path.resolve(expandHome(args.configPath));
+  if (args.allAccounts && String(args.url ?? "").trim()) {
+    throw new Error("--url cannot be used with --all-accounts (each account has its own webhookPath)");
+  }
   let config;
   try {
     const raw = await readFile(configPath, "utf8");
     config = JSON.parse(raw);
   } catch (err) {
-    const report = {
+    const accountReport = {
       configPath,
       account: normalizeAccountId(args.account),
       endpoint: "",
@@ -584,14 +648,34 @@ async function main() {
         makeCheck("config.load", false, `failed to load ${configPath}: ${String(err?.message || err)}`),
       ],
     };
-    report.summary = summarize(report.checks);
+    accountReport.summary = summarize(accountReport.checks);
+    const report = {
+      args,
+      configPath,
+      accounts: [accountReport],
+      summary: summarizeAccountReports([accountReport]),
+    };
     reportAndExit(report, args.json);
     return;
   }
 
-  const report = await runBotE2E({ config, args, configPath });
-  report.checks.unshift(makeCheck("config.load", true, `loaded ${configPath}`));
-  report.summary = summarize(report.checks);
+  const targetAccounts = args.allAccounts ? discoverBotAccountIds(config) : [normalizeAccountId(args.account)];
+  const accountReports = [];
+  for (const accountId of targetAccounts) {
+    // Keep checks deterministic and easier to read.
+    // eslint-disable-next-line no-await-in-loop
+    const report = await runBotE2E({ config, args, configPath, accountId });
+    report.checks.unshift(makeCheck("config.load", true, `loaded ${configPath}`));
+    report.summary = summarize(report.checks);
+    accountReports.push(report);
+  }
+
+  const report = {
+    args,
+    configPath,
+    accounts: accountReports,
+    summary: summarizeAccountReports(accountReports),
+  };
   reportAndExit(report, args.json);
 }
 

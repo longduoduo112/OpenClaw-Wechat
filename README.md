@@ -528,7 +528,7 @@ openclaw status --deep
 openclaw logs --follow
 npm run wecom:selfcheck -- --all-accounts
 npm run wecom:agent:selfcheck -- --account default
-npm run wecom:bot:selfcheck
+npm run wecom:bot:selfcheck -- --all-accounts
 ```
 
 ## 开发与发布
@@ -587,7 +587,7 @@ npm run wecom:bot:selfcheck
 1. 需要稳定私聊入口：优先用自建应用（Agent 模式）
 2. 需要群聊通知/群内对话：优先用 Webhook Bot / Bot 模式
 3. 需要两者兼顾：并行启用 Agent（入口）+ Bot（群能力）
-4. 运行 `npm run wecom:bot:selfcheck` 可看到 `bot.entry.visibility` 提示，用于快速确认该行为属于产品形态差异而非插件故障
+4. 运行 `npm run wecom:bot:selfcheck -- --account <id>`（或 `--all-accounts`）可看到 `bot.entry.visibility` 提示，用于快速确认该行为属于产品形态差异而非插件故障
 
 ### Q5：为什么 `curl https://域名/wecom/callback` 返回的是 WebUI 页面？
 这是路由层问题，不是插件正常行为。`GET /wecom/callback`（无 `echostr`）应返回纯文本 `wecom webhook ok`。  
