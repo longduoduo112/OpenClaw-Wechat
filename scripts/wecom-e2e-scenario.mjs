@@ -28,6 +28,8 @@ function parseArgs(argv) {
       pickFirstEnv("WECOM_E2E_AGENT_URL") ||
       joinBaseUrl(pickFirstEnv("WECOM_E2E_BASE_URL"), pickFirstEnv("WECOM_E2E_AGENT_PATH")) ||
       joinBaseUrl(pickFirstEnv("E2E_WECOM_BASE_URL"), pickFirstEnv("E2E_WECOM_AGENT_WEBHOOK_PATH") || "/wecom/callback"),
+    botLegacyUrl: pickFirstEnv("WECOM_E2E_BOT_LEGACY_URL"),
+    agentLegacyUrl: pickFirstEnv("WECOM_E2E_AGENT_LEGACY_URL"),
     configPath: pickFirstEnv("WECOM_E2E_CONFIG", "OPENCLAW_CONFIG_PATH"),
     account: "default",
     fromUser: pickFirstEnv("WECOM_E2E_FROM_USER", "E2E_WECOM_TEST_USER"),
@@ -51,6 +53,12 @@ function parseArgs(argv) {
       i += 1;
     } else if (arg === "--agent-url" && next) {
       out.agentUrl = next;
+      i += 1;
+    } else if (arg === "--bot-legacy-url" && next) {
+      out.botLegacyUrl = next;
+      i += 1;
+    } else if (arg === "--agent-legacy-url" && next) {
+      out.agentLegacyUrl = next;
       i += 1;
     } else if (arg === "--config" && next) {
       out.configPath = next;
@@ -91,7 +99,7 @@ function parseArgs(argv) {
   }
 
   const scenario = out.scenario;
-  const valid = new Set(["bot-smoke", "agent-smoke", "full-smoke", "bot-queue"]);
+  const valid = new Set(["bot-smoke", "agent-smoke", "full-smoke", "bot-queue", "compat-smoke"]);
   if (!valid.has(scenario)) {
     throw new Error(`Invalid --scenario, expected one of: ${Array.from(valid).join(" | ")}`);
   }
@@ -104,6 +112,15 @@ function parseArgs(argv) {
   if ((scenario === "agent-smoke" || scenario === "full-smoke") && !String(out.agentUrl).trim()) {
     throw new Error("Missing required argument: --agent-url <https://.../wecom/callback>");
   }
+  if (scenario === "compat-smoke") {
+    const hasBotPair = String(out.botUrl).trim() && String(out.botLegacyUrl).trim();
+    const hasAgentPair = String(out.agentUrl).trim() && String(out.agentLegacyUrl).trim();
+    if (!hasBotPair && !hasAgentPair) {
+      throw new Error(
+        "compat-smoke requires at least one pair: (--bot-url + --bot-legacy-url) or (--agent-url + --agent-legacy-url)",
+      );
+    }
+  }
 
   return out;
 }
@@ -112,17 +129,20 @@ function printHelp() {
   console.log(`OpenClaw-Wechat scenario E2E
 
 Usage:
-  npm run wecom:e2e:scenario -- --scenario <bot-smoke|agent-smoke|full-smoke|bot-queue> [options]
+  npm run wecom:e2e:scenario -- --scenario <bot-smoke|agent-smoke|full-smoke|bot-queue|compat-smoke> [options]
 
 Scenarios:
   bot-smoke    Run remote bot E2E once
   agent-smoke  Run remote agent E2E once
   full-smoke   Run remote all-in-one E2E (agent + bot + account selfcheck)
   bot-queue    Run bot E2E twice with same sender to validate queue/stream recovery
+  compat-smoke Run compatibility matrix on new + legacy webhook URLs
 
 Options:
   --bot-url <url>          Bot callback URL (required for bot/full/bot-queue)
   --agent-url <url>        Agent callback URL (required for agent/full)
+  --bot-legacy-url <url>   Legacy Bot callback URL (used by compat-smoke)
+  --agent-legacy-url <url> Legacy Agent callback URL (used by compat-smoke)
   --config <path>          Optional OpenClaw config path
   --account <id>           Agent account id (default: default)
   --from-user <userid>     Fixed sender id for scenario checks
@@ -138,6 +158,7 @@ Options:
 Env shortcuts:
   WECOM_E2E_BOT_URL / WECOM_E2E_AGENT_URL / WECOM_E2E_BASE_URL + *_PATH
   WECOM_E2E_TIMEOUT_MS / WECOM_E2E_POLL_* / WECOM_E2E_FROM_USER
+  WECOM_E2E_BOT_LEGACY_URL / WECOM_E2E_AGENT_LEGACY_URL
   Legacy: E2E_WECOM_BASE_URL / E2E_WECOM_WEBHOOK_PATH / E2E_WECOM_*
 `);
 }
@@ -217,6 +238,33 @@ async function main() {
       script: "./scripts/wecom-remote-e2e.mjs",
       args: buildRemoteE2eArgs({ mode: "bot", options: queueOptions, content: "第二条队列消息 /status" }),
     });
+  } else if (args.scenario === "compat-smoke") {
+    if (args.agentUrl && args.agentLegacyUrl) {
+      steps.push({
+        label: "Compat smoke: Agent new URL",
+        script: "./scripts/wecom-remote-e2e.mjs",
+        args: buildRemoteE2eArgs({ mode: "agent", options: args, content: "/status" }),
+      });
+      const legacyAgentOptions = { ...args, agentUrl: args.agentLegacyUrl };
+      steps.push({
+        label: "Compat smoke: Agent legacy URL",
+        script: "./scripts/wecom-remote-e2e.mjs",
+        args: buildRemoteE2eArgs({ mode: "agent", options: legacyAgentOptions, content: "/status" }),
+      });
+    }
+    if (args.botUrl && args.botLegacyUrl) {
+      steps.push({
+        label: "Compat smoke: Bot new URL",
+        script: "./scripts/wecom-remote-e2e.mjs",
+        args: buildRemoteE2eArgs({ mode: "bot", options: args, content: "/status" }),
+      });
+      const legacyBotOptions = { ...args, botUrl: args.botLegacyUrl };
+      steps.push({
+        label: "Compat smoke: Bot legacy URL",
+        script: "./scripts/wecom-remote-e2e.mjs",
+        args: buildRemoteE2eArgs({ mode: "bot", options: legacyBotOptions, content: "/status" }),
+      });
+    }
   }
 
   let index = 0;

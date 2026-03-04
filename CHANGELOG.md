@@ -24,6 +24,7 @@ All notable changes to this project will be documented in this file.
 - 新增远端 E2E 联动参数：`wecom:remote:e2e` / `wecom:e2e:scenario` 支持 `--prepare-browser`、`--collect-pdf`、`--browser-prepare-mode`、`--browser-require-ready`
 - 新增一键命令：`npm run wecom:e2e:full`（full-smoke + 浏览器准备检查 + PDF 回收）
 - 新增远端 E2E 环境变量兼容：`wecom:remote:e2e` / `wecom:e2e:scenario` 支持 `WECOM_E2E_*` 与 legacy `E2E_WECOM_*` 默认参数注入
+- 新增场景化兼容矩阵：`wecom:e2e:scenario --scenario compat-smoke` 支持新旧回调 URL 双链路验证（Agent/Bot）
 
 ### Changed
 - 多账号默认回调路径自动分配：
