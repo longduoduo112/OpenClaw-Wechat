@@ -173,6 +173,20 @@ test("resolveWecomCommandPolicyConfig reads admin and allowlist", () => {
   assert.deepEqual(policy.adminUsers.sort(), ["alice", "bob"]);
 });
 
+test("resolveWecomCommandPolicyConfig supports legacy commandAllowlist fields", () => {
+  const policy = core.resolveWecomCommandPolicyConfig({
+    channelConfig: {
+      commandAllowlist: ["status", "/help"],
+      commandBlockMessage: "legacy blocked",
+    },
+    envVars: {},
+    processEnv: {},
+  });
+  assert.equal(policy.enabled, true);
+  assert.deepEqual(policy.allowlist.sort(), ["/help", "/status"]);
+  assert.equal(policy.rejectMessage, "legacy blocked");
+});
+
 test("allowFrom policy resolves account override and env fallback", () => {
   const accountPolicy = core.resolveWecomAllowFromPolicyConfig({
     channelConfig: {

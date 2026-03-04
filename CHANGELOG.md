@@ -10,6 +10,7 @@ All notable changes to this project will be documented in this file.
 - 新增账号路径诊断单测与默认路径单测（Agent/Bot）
 - 新增 sunnoy 风格配置兼容层：支持 `agent.*`、`dynamicAgents.*`、`dm.createAgentOnFirstMessage`
 - 新增 legacy inline account 兼容解析（`channels.wecom.<accountId>`）及对应回归测试
+- 新增 legacy 指令配置兼容：`commandAllowlist`、`commandBlockMessage`
 
 ### Changed
 - 多账号默认回调路径自动分配：

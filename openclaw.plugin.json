@@ -13,7 +13,7 @@
     "type": "object",
     "additionalProperties": false,
     "patternProperties": {
-      "^(?!(enabled|corpId|corpSecret|agentId|callbackToken|token|callbackAesKey|encodingAesKey|webhookPath|agent|bot|delivery|webhookBot|stream|observability|outboundProxy|webhooks|allowFrom|allowFromRejectMessage|adminUsers|commands|groupChat|dynamicAgent|dynamicAgents|dm|debounce|streaming|voiceTranscription|accounts)$)[A-Za-z0-9_-]+$": {
+      "^(?!(enabled|corpId|corpSecret|agentId|callbackToken|token|callbackAesKey|encodingAesKey|webhookPath|agent|bot|delivery|webhookBot|stream|observability|outboundProxy|webhooks|allowFrom|allowFromRejectMessage|adminUsers|commandAllowlist|commandBlockMessage|commands|groupChat|dynamicAgent|dynamicAgents|dm|debounce|streaming|voiceTranscription|accounts)$)[A-Za-z0-9_-]+$": {
         "type": "object",
         "description": "兼容旧配置：inline 多账户（推荐迁移到 channels.wecom.accounts.<id>）"
       }
@@ -330,6 +330,18 @@
           "type": "string",
           "minLength": 1
         }
+      },
+      "commandAllowlist": {
+        "type": "array",
+        "description": "兼容旧配置：命令白名单（等价 commands.allowlist）",
+        "items": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "commandBlockMessage": {
+        "type": "string",
+        "description": "兼容旧配置：命令拦截提示（等价 commands.rejectMessage）"
       },
       "commands": {
         "type": "object",

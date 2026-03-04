@@ -25,6 +25,8 @@ const LEGACY_INLINE_ACCOUNT_RESERVED_KEYS = new Set([
   "allowFromRejectMessage",
   "rejectUnauthorizedMessage",
   "adminUsers",
+  "commandAllowlist",
+  "commandBlockMessage",
   "commands",
   "groupChat",
   "dynamicAgent",
