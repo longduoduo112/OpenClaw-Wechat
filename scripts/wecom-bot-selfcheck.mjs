@@ -258,6 +258,42 @@ function discoverBotAccountIds(config) {
   });
 }
 
+function buildPluginChecks(config) {
+  const checks = [];
+  const plugins = config?.plugins ?? {};
+  const entry = plugins?.entries?.["openclaw-wechat"];
+  const allow = Array.isArray(plugins?.allow) ? plugins.allow.map((value) => String(value)) : null;
+  const allowConfigured = Array.isArray(allow);
+  const allowIncludesPlugin = allowConfigured && allow.includes("openclaw-wechat");
+
+  checks.push(
+    makeCheck(
+      "plugins.enabled",
+      plugins.enabled !== false,
+      plugins.enabled === false ? "plugins.enabled=false" : "plugins enabled",
+    ),
+  );
+  checks.push(
+    makeCheck(
+      "plugins.entry.openclaw-wechat",
+      entry?.enabled !== false,
+      entry?.enabled === false ? "plugins.entries.openclaw-wechat.enabled=false" : "entry enabled or inherited",
+    ),
+  );
+  checks.push(
+    makeCheck(
+      "plugins.allow",
+      allowIncludesPlugin,
+      allowConfigured
+        ? `allow includes openclaw-wechat=${allowIncludesPlugin}`
+        : "plugins.allow missing (should be explicit allowlist)",
+      allowConfigured ? { allow } : null,
+    ),
+  );
+
+  return checks;
+}
+
 function resolveBotConfig(config) {
   const accountId = normalizeAccountId(config?.accountId ?? "default");
   const channel = config?.channels?.wecom ?? {};
@@ -422,6 +458,7 @@ function reportAndExit(report, asJson = false) {
 
 async function runBotE2E({ config, args, configPath, accountId }) {
   const checks = [];
+  checks.push(...buildPluginChecks(config));
   const botConfig = resolveBotConfig({
     ...config,
     accountId,

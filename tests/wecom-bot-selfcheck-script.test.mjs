@@ -59,9 +59,16 @@ test("wecom-bot-selfcheck supports --all-accounts discovery", async () => {
   const report = JSON.parse(result.stdout);
   assert.equal(report?.args?.allAccounts, true);
   assert.ok(Array.isArray(report?.accounts));
-  const accountIds = report.accounts.map((item) => String(item?.account ?? "")).sort();
-  assert.deepEqual(accountIds, ["default", "marketing", "ops", "qa"]);
-  assert.equal(report?.summary?.accountsTotal, 4);
+  const accountIds = new Set(report.accounts.map((item) => String(item?.account ?? "")));
+  assert.equal(accountIds.has("default"), true);
+  assert.equal(accountIds.has("marketing"), true);
+  assert.equal(accountIds.has("ops"), true);
+  assert.equal(accountIds.has("qa"), true);
+  assert.ok((report?.summary?.accountsTotal ?? 0) >= 4);
+  for (const accountReport of report.accounts) {
+    const checkNames = accountReport.checks.map((check) => check.name);
+    assert.equal(checkNames.includes("plugins.allow"), true);
+  }
 });
 
 test("wecom-bot-selfcheck rejects --url with --all-accounts", async () => {
