@@ -627,6 +627,7 @@ export function resolveWecomCommandPolicyConfig({
   );
   const rejectMessage = pickFirstNonEmptyString(
     commandConfig.rejectMessage,
+    commandConfig.blockMessage,
     channelConfig?.commandBlockMessage,
     envVars?.WECOM_COMMANDS_REJECT_MESSAGE,
     processEnv?.WECOM_COMMANDS_REJECT_MESSAGE,
@@ -648,8 +649,12 @@ export function resolveWecomAllowFromPolicyConfig({
   processEnv = process.env,
   accountId = "default",
 } = {}) {
-  const accountAllowFrom = uniqueAllowFromList(parseStringList(accountConfig?.allowFrom));
-  const channelAllowFrom = uniqueAllowFromList(parseStringList(channelConfig?.allowFrom));
+  const accountAllowFrom = uniqueAllowFromList(
+    parseStringList(accountConfig?.allowFrom, accountConfig?.dm?.allowFrom),
+  );
+  const channelAllowFrom = uniqueAllowFromList(
+    parseStringList(channelConfig?.allowFrom, channelConfig?.dm?.allowFrom),
+  );
   const envAllowFrom = uniqueAllowFromList(readAllowFromEnv(envVars, processEnv, accountId));
   const allowFrom = accountAllowFrom.length > 0 ? accountAllowFrom : channelAllowFrom.length > 0 ? channelAllowFrom : envAllowFrom;
   const rejectMessage = pickFirstNonEmptyString(

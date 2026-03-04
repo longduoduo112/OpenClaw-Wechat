@@ -187,6 +187,23 @@ test("resolveWecomCommandPolicyConfig supports legacy commandAllowlist fields", 
   assert.equal(policy.rejectMessage, "legacy blocked");
 });
 
+test("resolveWecomCommandPolicyConfig supports commands.blockMessage alias", () => {
+  const policy = core.resolveWecomCommandPolicyConfig({
+    channelConfig: {
+      commands: {
+        enabled: true,
+        allowlist: ["/status"],
+        blockMessage: "blocked by alias",
+      },
+    },
+    envVars: {},
+    processEnv: {},
+  });
+  assert.equal(policy.enabled, true);
+  assert.deepEqual(policy.allowlist, ["/status"]);
+  assert.equal(policy.rejectMessage, "blocked by alias");
+});
+
 test("allowFrom policy resolves account override and env fallback", () => {
   const accountPolicy = core.resolveWecomAllowFromPolicyConfig({
     channelConfig: {
@@ -219,6 +236,21 @@ test("allowFrom policy resolves account override and env fallback", () => {
   });
   assert.deepEqual(envPolicy.allowFrom.sort(), ["jerry", "tom"]);
   assert.equal(envPolicy.rejectMessage, "销售账号未授权");
+});
+
+test("allowFrom policy supports dm.allowFrom compatibility keys", () => {
+  const policy = core.resolveWecomAllowFromPolicyConfig({
+    channelConfig: {
+      dm: {
+        allowFrom: ["wecom:legacy_dm_user"],
+      },
+    },
+    accountConfig: {},
+    envVars: {},
+    processEnv: {},
+    accountId: "default",
+  });
+  assert.deepEqual(policy.allowFrom, ["legacy_dm_user"]);
 });
 
 test("isWecomSenderAllowed matches normalized sender ids", () => {

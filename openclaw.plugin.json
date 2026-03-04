@@ -364,6 +364,10 @@
           "rejectMessage": {
             "type": "string",
             "description": "命中未授权指令时返回给用户的提示文本"
+          },
+          "blockMessage": {
+            "type": "string",
+            "description": "兼容旧配置：等价 rejectMessage"
           }
         }
       },
@@ -542,6 +546,14 @@
             "type": "boolean",
             "default": true,
             "description": "是否为私聊在首条消息时创建动态 Agent（等价 dynamicAgent.dmCreateAgentOnFirstMessage）"
+          },
+          "allowFrom": {
+            "type": "array",
+            "description": "兼容旧配置：私聊发送者允许列表（优先级同 allowFrom）",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
           }
         }
       },
