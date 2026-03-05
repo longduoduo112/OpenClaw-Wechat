@@ -18,6 +18,7 @@ This channel integrates OpenClaw with WeCom (企业微信) internal apps.
 - Delivery fallback chain: optional (`active_stream -> response_url -> webhook_bot -> agent_push`)
 - Bot card replies: supported (`channels.wecom.bot.card`, `markdown/template_card`)
 - Direct-message policy: supported (`channels.wecom.dm.mode=open|allowlist|deny`, account-level override via `accounts.<id>.dm`)
+- Event handling: supported (`channels.wecom.events.*`, supports `enter_agent` welcome reply)
 - Group trigger mode: `direct` / `mention` / `keyword` (`channels.wecom.groupChat.triggerMode`)
 - Dynamic agent route mode: `deterministic` / `mapping` / `hybrid` (`channels.wecom.dynamicAgent.mode`)
 - Dynamic workspace seeding: supported via `channels.wecom.dynamicAgent.workspaceTemplate`
@@ -153,6 +154,11 @@ All new switches are default-off for compatibility.
         "mode": "allowlist",
         "allowFrom": ["alice", "wecom:bob"],
         "rejectMessage": "当前账号未授权，请联系管理员。"
+      },
+      "events": {
+        "enabled": true,
+        "enterAgentWelcomeEnabled": true,
+        "enterAgentWelcomeText": "你好，我是 AI 助手，直接发消息即可开始对话。"
       }
     }
   }

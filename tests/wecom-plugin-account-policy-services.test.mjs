@@ -20,6 +20,7 @@ test("createWecomPluginAccountPolicyServices returns account/policy/command bind
   assert.equal(typeof services.listEnabledWecomAccounts, "function");
   assert.equal(typeof services.resolveWecomBotConfig, "function");
   assert.equal(typeof services.resolveWecomCommandPolicy, "function");
+  assert.equal(typeof services.resolveWecomEventPolicy, "function");
   assert.equal(typeof services.resolveWecomVoiceTranscriptionConfig, "function");
   assert.equal(typeof services.COMMANDS, "object");
   assert.equal(typeof services.WecomChannelPlugin, "object");

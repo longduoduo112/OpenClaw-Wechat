@@ -237,6 +237,8 @@ export function extractWecomXmlInboundEnvelope(msgObj) {
     fromUser: normalizeToken(msgObj.FromUserName),
     chatId: normalizeToken(msgObj.ChatId),
     msgId: normalizeToken(msgObj.MsgId),
+    eventType: normalizeLowerToken(msgObj.Event),
+    eventKey: normalizeToken(msgObj.EventKey),
     content: normalizeToken(msgObj.Content),
     mediaId: normalizeToken(msgObj.MediaId),
     picUrl: normalizeToken(msgObj.PicUrl),

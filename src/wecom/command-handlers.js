@@ -10,6 +10,11 @@ export function createWecomCommandHandlers({
   resolveWecomCommandPolicy,
   resolveWecomAllowFromPolicy,
   resolveWecomDmPolicy,
+  resolveWecomEventPolicy = () => ({
+    enabled: true,
+    enterAgentWelcomeEnabled: false,
+    enterAgentWelcomeText: "",
+  }),
   resolveWecomGroupChatPolicy,
   resolveWecomTextDebouncePolicy,
   resolveWecomReplyStreamingPolicy,
@@ -41,6 +46,9 @@ export function createWecomCommandHandlers({
   }
   if (typeof resolveWecomDmPolicy !== "function") {
     throw new Error("createWecomCommandHandlers: resolveWecomDmPolicy is required");
+  }
+  if (typeof resolveWecomEventPolicy !== "function") {
+    throw new Error("createWecomCommandHandlers: resolveWecomEventPolicy is required");
   }
   if (typeof resolveWecomGroupChatPolicy !== "function") {
     throw new Error("createWecomCommandHandlers: resolveWecomGroupChatPolicy is required");
@@ -91,6 +99,7 @@ export function createWecomCommandHandlers({
     const commandPolicy = resolveWecomCommandPolicy(api);
     const allowFromPolicy = resolveWecomAllowFromPolicy(api, config?.accountId, config);
     const dmPolicy = resolveWecomDmPolicy(api, config?.accountId, config);
+    const eventPolicy = resolveWecomEventPolicy(api, config?.accountId, config);
     const groupPolicy = resolveWecomGroupChatPolicy(api);
     const debouncePolicy = resolveWecomTextDebouncePolicy(api);
     const streamingPolicy = resolveWecomReplyStreamingPolicy(api);
@@ -110,6 +119,7 @@ export function createWecomCommandHandlers({
       commandPolicy,
       allowFromPolicy,
       dmPolicy,
+      eventPolicy,
       groupPolicy,
       debouncePolicy,
       streamingPolicy,
@@ -137,6 +147,7 @@ export function createWecomCommandHandlers({
     const commandPolicy = resolveWecomCommandPolicy(api);
     const allowFromPolicy = resolveWecomAllowFromPolicy(api, "default", {});
     const dmPolicy = resolveWecomDmPolicy(api, "default", {});
+    const eventPolicy = resolveWecomEventPolicy(api, "default", {});
     const groupPolicy = resolveWecomGroupChatPolicy(api);
     const botConfig = resolveWecomBotConfig(api);
     const deliveryFallbackPolicy = resolveWecomDeliveryFallbackPolicy(api);
@@ -152,6 +163,7 @@ export function createWecomCommandHandlers({
       commandPolicy,
       allowFromPolicy,
       dmPolicy,
+      eventPolicy,
       groupPolicy,
       deliveryFallbackPolicy,
       streamManagerPolicy,

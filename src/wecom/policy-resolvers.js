@@ -7,6 +7,7 @@ export function createWecomPolicyResolvers({
   resolveWecomCommandPolicyConfig,
   resolveWecomAllowFromPolicyConfig,
   resolveWecomDmPolicyConfig,
+  resolveWecomEventPolicyConfig,
   resolveWecomGroupChatConfig,
   resolveWecomDebounceConfig,
   resolveWecomStreamingConfig,
@@ -114,6 +115,22 @@ export function createWecomPolicyResolvers({
     });
   }
 
+  function resolveWecomEventPolicy(api, accountId, accountConfig = {}) {
+    const inputs = resolveWecomPolicyInputs(api);
+    if (typeof resolveWecomEventPolicyConfig !== "function") {
+      return {
+        enabled: true,
+        enterAgentWelcomeEnabled: false,
+        enterAgentWelcomeText: "你好，我是 AI 助手，直接发消息即可开始对话。",
+      };
+    }
+    return resolveWecomEventPolicyConfig({
+      ...inputs,
+      accountId: normalizeAccountId(accountId ?? "default"),
+      accountConfig: accountConfig ?? {},
+    });
+  }
+
   function resolveWecomGroupChatPolicy(api) {
     return resolveWecomGroupChatConfig(resolveWecomPolicyInputs(api));
   }
@@ -154,6 +171,7 @@ export function createWecomPolicyResolvers({
     resolveWecomCommandPolicy,
     resolveWecomAllowFromPolicy,
     resolveWecomDmPolicy,
+    resolveWecomEventPolicy,
     resolveWecomGroupChatPolicy,
     resolveWecomTextDebouncePolicy,
     resolveWecomReplyStreamingPolicy,

@@ -52,6 +52,17 @@ All notable changes to this project will be documented in this file.
 - 远端 E2E 兼容增强：`test:e2e:remote` 支持 `WECOM_E2E_*` 与 legacy `E2E_WECOM_*` 两套环境变量
 - 语法检查范围增强：`test:syntax` 从仅 `src` 扩展到 `src + scripts + tests`，降低脚本/测试回归漏检风险
 
+## [1.7.1] - 2026-03-05
+
+### Added
+- 新增事件策略 `events.*`：支持处理 `MsgType=event`，并支持 `enter_agent` 自动欢迎语
+- 新增事件策略环境变量：`WECOM_EVENTS_*` 与 `WECOM_<ACCOUNT>_EVENTS_*`
+- 新增事件链路测试：覆盖 XML 事件字段解析、事件调度与 `enter_agent` 欢迎语发送
+
+### Changed
+- `/status` 增加事件策略状态展示（是否启用事件处理与欢迎语）
+- 文档更新：README（中英文）与渠道文档新增事件策略配置说明
+
 ## [1.7.0] - 2026-03-05
 
 ### Added

@@ -1,7 +1,7 @@
 {
   "id": "openclaw-wechat",
   "name": "OpenClaw-Wechat",
-  "version": "1.7.0",
+  "version": "1.7.1",
   "description": "WeCom (企业微信) channel plugin for OpenClaw (自建应用回调 + 发送 API).",
   "channels": [
     "wecom"
@@ -625,6 +625,27 @@
           }
         }
       },
+      "events": {
+        "type": "object",
+        "description": "事件消息策略（如 enter_agent 欢迎语）",
+        "additionalProperties": false,
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "default": true,
+            "description": "是否处理事件消息（MsgType=event）"
+          },
+          "enterAgentWelcomeEnabled": {
+            "type": "boolean",
+            "default": false,
+            "description": "是否在 enter_agent 事件时自动回复欢迎语"
+          },
+          "enterAgentWelcomeText": {
+            "type": "string",
+            "description": "enter_agent 自动欢迎语文本"
+          }
+        }
+      },
       "debounce": {
         "type": "object",
         "description": "文本消息防抖合并",
@@ -1052,6 +1073,27 @@
                 "rejectMessage": {
                   "type": "string",
                   "description": "私聊被拒绝时的提示文案"
+                }
+              }
+            },
+            "events": {
+              "type": "object",
+              "description": "可选：该账户事件策略（覆盖 channels.wecom.events）",
+              "additionalProperties": false,
+              "properties": {
+                "enabled": {
+                  "type": "boolean",
+                  "default": true,
+                  "description": "是否处理该账户事件消息（MsgType=event）"
+                },
+                "enterAgentWelcomeEnabled": {
+                  "type": "boolean",
+                  "default": false,
+                  "description": "是否在 enter_agent 事件自动回复欢迎语"
+                },
+                "enterAgentWelcomeText": {
+                  "type": "string",
+                  "description": "该账户 enter_agent 自动欢迎语文本"
                 }
               }
             }

@@ -53,6 +53,15 @@ const ASYNC_INBOUND_HANDLERS = {
       linkPicUrl: inbound.linkPicUrl,
     }),
   },
+  event: {
+    requiresMediaId: false,
+    errorLabel: "event",
+    buildTaskPayload: (inbound) => ({
+      msgType: "event",
+      eventType: inbound.eventType,
+      eventKey: inbound.eventKey,
+    }),
+  },
 };
 
 function enqueueInboundTask({

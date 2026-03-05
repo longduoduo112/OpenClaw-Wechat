@@ -317,6 +317,60 @@ test("resolveWecomDmPolicyConfig supports mode/allowlist and scoped env fallback
   assert.equal(scopedEnvPolicy.rejectMessage, "销售私聊未授权");
 });
 
+test("resolveWecomEventPolicyConfig supports channel/account/env overrides", () => {
+  const fromChannel = core.resolveWecomEventPolicyConfig({
+    channelConfig: {
+      events: {
+        enabled: true,
+        enterAgentWelcomeEnabled: true,
+        enterAgentWelcomeText: "欢迎来到智能助手",
+      },
+    },
+    accountConfig: {},
+    envVars: {},
+    processEnv: {},
+    accountId: "default",
+  });
+  assert.equal(fromChannel.enabled, true);
+  assert.equal(fromChannel.enterAgentWelcomeEnabled, true);
+  assert.equal(fromChannel.enterAgentWelcomeText, "欢迎来到智能助手");
+
+  const fromAccount = core.resolveWecomEventPolicyConfig({
+    channelConfig: {
+      events: {
+        enabled: true,
+        enterAgentWelcomeEnabled: false,
+      },
+    },
+    accountConfig: {
+      events: {
+        enterAgentWelcomeEnabled: true,
+        enterAgentWelcomeText: "销售助手为你服务",
+      },
+    },
+    envVars: {},
+    processEnv: {},
+    accountId: "sales",
+  });
+  assert.equal(fromAccount.enterAgentWelcomeEnabled, true);
+  assert.equal(fromAccount.enterAgentWelcomeText, "销售助手为你服务");
+
+  const fromScopedEnv = core.resolveWecomEventPolicyConfig({
+    channelConfig: {},
+    accountConfig: {},
+    envVars: {
+      WECOM_SALES_EVENTS_ENABLED: "1",
+      WECOM_SALES_EVENTS_ENTER_AGENT_WELCOME_ENABLED: "true",
+      WECOM_SALES_EVENTS_ENTER_AGENT_WELCOME_TEXT: "Env 欢迎语",
+    },
+    processEnv: {},
+    accountId: "sales",
+  });
+  assert.equal(fromScopedEnv.enabled, true);
+  assert.equal(fromScopedEnv.enterAgentWelcomeEnabled, true);
+  assert.equal(fromScopedEnv.enterAgentWelcomeText, "Env 欢迎语");
+});
+
 test("isWecomSenderAllowed matches normalized sender ids", () => {
   assert.equal(core.isWecomSenderAllowed({ senderId: "wecom:Alice", allowFrom: ["user:alice"] }), true);
   assert.equal(core.isWecomSenderAllowed({ senderId: "Bob", allowFrom: ["alice"] }), false);

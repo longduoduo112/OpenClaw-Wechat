@@ -42,6 +42,7 @@ const DEFAULT_COMMAND_ALLOWLIST = Object.freeze([
   "/compact",
 ]);
 const DEFAULT_ALLOW_FROM_REJECT_MESSAGE = "当前账号未授权，请联系管理员。";
+const DEFAULT_EVENT_ENTER_AGENT_WELCOME_TEXT = "你好，我是 AI 助手，直接发消息即可开始对话。";
 const DEFAULT_DELIVERY_FALLBACK_ORDER = Object.freeze([
   "active_stream",
   "response_url",
@@ -315,6 +316,59 @@ function readDmRejectMessageEnv(envVars, processEnv, accountId = "default") {
     scopedRejectMessageKey ? processEnv?.[scopedRejectMessageKey] : undefined,
     envVars?.WECOM_DM_REJECT_MESSAGE,
     processEnv?.WECOM_DM_REJECT_MESSAGE,
+  );
+}
+
+function readEventEnabledEnv(envVars, processEnv, accountId = "default") {
+  const normalizedId = normalizeAccountIdForEnv(accountId);
+  const scopedEnabledKey = normalizedId === "default" ? null : `WECOM_${normalizedId.toUpperCase()}_EVENT_ENABLED`;
+  const scopedEventsEnabledKey =
+    normalizedId === "default" ? null : `WECOM_${normalizedId.toUpperCase()}_EVENTS_ENABLED`;
+  return pickFirstNonEmptyString(
+    scopedEnabledKey ? envVars?.[scopedEnabledKey] : undefined,
+    scopedEnabledKey ? processEnv?.[scopedEnabledKey] : undefined,
+    scopedEventsEnabledKey ? envVars?.[scopedEventsEnabledKey] : undefined,
+    scopedEventsEnabledKey ? processEnv?.[scopedEventsEnabledKey] : undefined,
+    envVars?.WECOM_EVENT_ENABLED,
+    processEnv?.WECOM_EVENT_ENABLED,
+    envVars?.WECOM_EVENTS_ENABLED,
+    processEnv?.WECOM_EVENTS_ENABLED,
+  );
+}
+
+function readEventEnterAgentWelcomeEnabledEnv(envVars, processEnv, accountId = "default") {
+  const normalizedId = normalizeAccountIdForEnv(accountId);
+  const scopedEnabledKey =
+    normalizedId === "default" ? null : `WECOM_${normalizedId.toUpperCase()}_EVENT_ENTER_AGENT_WELCOME_ENABLED`;
+  const scopedEventsEnabledKey =
+    normalizedId === "default" ? null : `WECOM_${normalizedId.toUpperCase()}_EVENTS_ENTER_AGENT_WELCOME_ENABLED`;
+  return pickFirstNonEmptyString(
+    scopedEnabledKey ? envVars?.[scopedEnabledKey] : undefined,
+    scopedEnabledKey ? processEnv?.[scopedEnabledKey] : undefined,
+    scopedEventsEnabledKey ? envVars?.[scopedEventsEnabledKey] : undefined,
+    scopedEventsEnabledKey ? processEnv?.[scopedEventsEnabledKey] : undefined,
+    envVars?.WECOM_EVENT_ENTER_AGENT_WELCOME_ENABLED,
+    processEnv?.WECOM_EVENT_ENTER_AGENT_WELCOME_ENABLED,
+    envVars?.WECOM_EVENTS_ENTER_AGENT_WELCOME_ENABLED,
+    processEnv?.WECOM_EVENTS_ENTER_AGENT_WELCOME_ENABLED,
+  );
+}
+
+function readEventEnterAgentWelcomeTextEnv(envVars, processEnv, accountId = "default") {
+  const normalizedId = normalizeAccountIdForEnv(accountId);
+  const scopedTextKey =
+    normalizedId === "default" ? null : `WECOM_${normalizedId.toUpperCase()}_EVENT_ENTER_AGENT_WELCOME_TEXT`;
+  const scopedEventsTextKey =
+    normalizedId === "default" ? null : `WECOM_${normalizedId.toUpperCase()}_EVENTS_ENTER_AGENT_WELCOME_TEXT`;
+  return pickFirstNonEmptyString(
+    scopedTextKey ? envVars?.[scopedTextKey] : undefined,
+    scopedTextKey ? processEnv?.[scopedTextKey] : undefined,
+    scopedEventsTextKey ? envVars?.[scopedEventsTextKey] : undefined,
+    scopedEventsTextKey ? processEnv?.[scopedEventsTextKey] : undefined,
+    envVars?.WECOM_EVENT_ENTER_AGENT_WELCOME_TEXT,
+    processEnv?.WECOM_EVENT_ENTER_AGENT_WELCOME_TEXT,
+    envVars?.WECOM_EVENTS_ENTER_AGENT_WELCOME_TEXT,
+    processEnv?.WECOM_EVENTS_ENTER_AGENT_WELCOME_TEXT,
   );
 }
 
@@ -774,6 +828,44 @@ export function resolveWecomDmPolicyConfig({
     allowFrom,
     rejectMessage,
     enabled: effectiveMode !== "open" || allowFrom.length > 0,
+  };
+}
+
+export function resolveWecomEventPolicyConfig({
+  channelConfig = {},
+  accountConfig = {},
+  envVars = {},
+  processEnv = process.env,
+  accountId = "default",
+} = {}) {
+  const channelEventConfig = channelConfig?.events && typeof channelConfig.events === "object" ? channelConfig.events : {};
+  const accountEventConfig = accountConfig?.events && typeof accountConfig.events === "object" ? accountConfig.events : {};
+  const enabled = parseBooleanLike(
+    accountEventConfig.enabled,
+    parseBooleanLike(
+      channelEventConfig.enabled,
+      parseBooleanLike(readEventEnabledEnv(envVars, processEnv, accountId), true),
+    ),
+  );
+  const enterAgentWelcomeEnabled = enabled
+    ? parseBooleanLike(
+        accountEventConfig.enterAgentWelcomeEnabled,
+        parseBooleanLike(
+          channelEventConfig.enterAgentWelcomeEnabled,
+          parseBooleanLike(readEventEnterAgentWelcomeEnabledEnv(envVars, processEnv, accountId), false),
+        ),
+      )
+    : false;
+  const enterAgentWelcomeText = pickFirstNonEmptyString(
+    accountEventConfig.enterAgentWelcomeText,
+    channelEventConfig.enterAgentWelcomeText,
+    readEventEnterAgentWelcomeTextEnv(envVars, processEnv, accountId),
+    DEFAULT_EVENT_ENTER_AGENT_WELCOME_TEXT,
+  );
+  return {
+    enabled,
+    enterAgentWelcomeEnabled,
+    enterAgentWelcomeText,
   };
 }
 

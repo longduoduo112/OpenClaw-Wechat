@@ -20,6 +20,16 @@ function buildDmPolicyStatusLine(dmPolicy = {}) {
   return "ℹ️ 私聊策略：开放（open）";
 }
 
+function buildEventPolicyStatusLine(eventPolicy = {}) {
+  if (eventPolicy?.enabled === false) {
+    return "⚠️ 事件策略：已关闭";
+  }
+  if (eventPolicy?.enterAgentWelcomeEnabled) {
+    return "✅ 事件策略：enter_agent 自动欢迎语已启用";
+  }
+  return "ℹ️ 事件策略：已启用（enter_agent 欢迎语未启用）";
+}
+
 function buildObservabilityStatusLines(observabilityMetrics = {}) {
   const inboundTotal = Number(observabilityMetrics?.inboundTotal || 0);
   const deliveryTotal = Number(observabilityMetrics?.deliveryTotal || 0);
@@ -54,6 +64,7 @@ export function buildAgentStatusText({
   commandPolicy,
   allowFromPolicy,
   dmPolicy,
+  eventPolicy,
   groupPolicy,
   debouncePolicy,
   streamingPolicy,
@@ -75,6 +86,7 @@ export function buildAgentStatusText({
       ? "ℹ️ 发送者授权：未限制（allowFrom 未配置）"
       : `✅ 发送者授权：已限制 ${allowFromPolicy.allowFrom.length} 个用户`;
   const dmPolicyLine = buildDmPolicyStatusLine(dmPolicy);
+  const eventPolicyLine = buildEventPolicyStatusLine(eventPolicy);
   const groupPolicyLine = groupPolicy.enabled
     ? groupPolicy.triggerMode === "mention"
       ? "✅ 群聊触发：仅 @ 命中后处理"
@@ -126,6 +138,7 @@ export function buildAgentStatusText({
 ${commandPolicyLine}
 ${allowFromPolicyLine}
 ${dmPolicyLine}
+${eventPolicyLine}
 ${groupPolicyLine}
 ${debouncePolicyLine}
 ${streamingPolicyLine}
@@ -149,6 +162,7 @@ export function buildBotStatusText({
   commandPolicy,
   allowFromPolicy,
   dmPolicy,
+  eventPolicy,
   groupPolicy,
   deliveryFallbackPolicy,
   streamManagerPolicy,
@@ -164,6 +178,7 @@ export function buildBotStatusText({
       ? "ℹ️ 发送者授权：未限制（allowFrom 未配置）"
       : `✅ 发送者授权：已限制 ${allowFromPolicy.allowFrom.length} 个用户`;
   const dmPolicyLine = buildDmPolicyStatusLine(dmPolicy);
+  const eventPolicyLine = buildEventPolicyStatusLine(eventPolicy);
   const groupPolicyLine = groupPolicy.enabled
     ? groupPolicy.triggerMode === "mention"
       ? "✅ 群聊触发：仅 @ 命中后处理"
@@ -201,6 +216,7 @@ Bot Webhook：${botConfig.webhookPath}
 ${commandPolicyLine}
 ${allowFromPolicyLine}
 ${dmPolicyLine}
+${eventPolicyLine}
 ${groupPolicyLine}
 ${fallbackPolicyLine}
 ${streamManagerPolicyLine}

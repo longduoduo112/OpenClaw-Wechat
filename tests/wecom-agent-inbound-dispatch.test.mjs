@@ -89,10 +89,26 @@ test("dispatchWecomAgentInbound returns false when media type lacks mediaId", ()
   assert.equal(processedPayloads.length, 0);
 });
 
+test("dispatchWecomAgentInbound enqueues event task", async () => {
+  const { dispatch, queuedCalls, processedPayloads } = createContext();
+  const handled = dispatch({
+    inbound: { msgType: "event", eventType: "enter_agent", eventKey: "menu-1" },
+    basePayload: { fromUser: "u1", accountId: "default" },
+  });
+
+  assert.equal(handled, true);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(queuedCalls[0], "execute");
+  assert.deepEqual(queuedCalls[1], { sessionId: "wecom:u1", isBot: false });
+  assert.equal(processedPayloads.length, 1);
+  assert.equal(processedPayloads[0].msgType, "event");
+  assert.equal(processedPayloads[0].eventType, "enter_agent");
+});
+
 test("dispatchWecomAgentInbound returns false for unsupported message type", () => {
   const { dispatch, queuedCalls, processedPayloads } = createContext();
   const handled = dispatch({
-    inbound: { msgType: "event" },
+    inbound: { msgType: "unknown" },
     basePayload: { fromUser: "u1" },
   });
 

@@ -34,6 +34,7 @@ OpenClaw-Wechat is an OpenClaw channel plugin for Enterprise WeChat (WeCom), wit
 | Multi-account support | ✅ | `channels.wecom.accounts.<id>` |
 | Sender allowlist and admin bypass | ✅ | `allowFrom` + `adminUsers` |
 | Direct-message policy | ✅ | `dm.mode=open/allowlist/deny` + account overrides |
+| Event welcome reply (`enter_agent`) | ✅ | configurable via `events.enterAgentWelcome*` |
 | Command allowlist | ✅ | `/help`, `/status`, `/clear`, `/new`, etc. |
 | Group trigger policy | ✅ | mention-required or direct-trigger |
 | Debounce and late-reply fallback | ✅ | better stability under queue/timeout |
@@ -205,6 +206,7 @@ When multi-account is enabled, each account can override Bot callback credential
 | Command ACL | `commands.enabled`, `commands.allowlist`, `commands.rejectMessage` |
 | Admin bypass | `adminUsers` |
 | Direct-message policy | `dm.mode`, `dm.allowFrom`, `dm.rejectMessage` |
+| Event policy | `events.enabled`, `events.enterAgentWelcomeEnabled`, `events.enterAgentWelcomeText` |
 | Group trigger | `groupChat.enabled`, `groupChat.triggerMode`, `groupChat.mentionPatterns`, `groupChat.triggerKeywords` |
 | Dynamic route | `dynamicAgent.*` (compatible with `dynamicAgents.*`, `dm.createAgentOnFirstMessage`) |
 | Debounce | `debounce.enabled`, `debounce.windowMs`, `debounce.maxBatch` |
@@ -300,6 +302,7 @@ Outbound target formats:
 | `WECOM_ALLOW_FROM*` | sender authorization |
 | `WECOM_COMMANDS_*` | command ACL |
 | `WECOM_DM_*`, `WECOM_<ACCOUNT>_DM_*` | DM policy + allowlist |
+| `WECOM_EVENTS_*`, `WECOM_<ACCOUNT>_EVENTS_*` | event handling + enter_agent welcome text |
 | `WECOM_GROUP_CHAT_*` | group trigger policy |
 | `WECOM_DEBOUNCE_*` | text debounce |
 | `WECOM_STREAMING_*` | Agent incremental output |

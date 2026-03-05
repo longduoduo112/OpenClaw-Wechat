@@ -31,6 +31,7 @@ test("createPluginProcessingDeps maps context into three dependency groups", () 
     resolveWecomCommandPolicy: fn,
     resolveWecomAllowFromPolicy: fn,
     resolveWecomDmPolicy: fn,
+    resolveWecomEventPolicy: fn,
     isWecomSenderAllowed: fn,
     extractLeadingSlashCommand: fn,
     buildWecomBotHelpText: fn,
@@ -74,6 +75,7 @@ test("createPluginProcessingDeps maps context into three dependency groups", () 
   assert.equal(deps.botInboundDeps.buildWecomBotSessionId, fn);
   assert.equal(deps.botInboundDeps.buildBotInboundContent, fn);
   assert.equal(deps.botInboundDeps.resolveWecomDmPolicy, fn);
+  assert.equal(deps.agentInboundDeps.resolveWecomEventPolicy, fn);
   assert.equal(deps.agentInboundDeps.sendWecomText, fn);
   assert.equal(deps.textSchedulerDeps.executeInboundTaskWithSessionQueue, fn);
 });

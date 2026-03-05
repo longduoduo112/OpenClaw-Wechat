@@ -96,6 +96,7 @@ npm run wecom:selfcheck -- --all-accounts
 | 多账户 | ✅ | `channels.wecom.accounts.<id>` |
 | 发送者授权控制 | ✅ | `allowFrom` + 账户级覆盖 |
 | 私聊策略（DM） | ✅ | `dm.mode=open/allowlist/deny` + 账户级覆盖 |
+| 事件欢迎语（enter_agent） | ✅ | `events.enterAgentWelcome*` 可配置 |
 | 命令白名单 | ✅ | `/help` `/status` `/clear` `/new` 等 |
 | 群聊触发策略 | ✅ | 支持 `direct/mention/keyword` 三种模式 |
 | 文本防抖合并 | ✅ | 窗口期内多条消息合并投递 |
@@ -338,6 +339,7 @@ node ./scripts/wecom-bot-selfcheck.mjs --help
 | 管理员 | `adminUsers` | 绕过命令白名单 |
 | 命令白名单 | `commands.enabled` + `commands.allowlist` | 限制 `/` 指令 |
 | 私聊策略 | `dm.mode` + `dm.allowFrom` + `dm.rejectMessage` | 控制私聊开放/白名单/拒绝 |
+| 事件策略 | `events.enabled` + `events.enterAgentWelcomeEnabled` + `events.enterAgentWelcomeText` | 控制事件处理与 enter_agent 欢迎语 |
 | 群聊触发 | `groupChat.enabled` + `triggerMode` + `mentionPatterns` + `triggerKeywords` | 控制群消息触发条件 |
 | 动态路由 | `dynamicAgent.*`（兼容 `dynamicAgents.*`、`dm.createAgentOnFirstMessage`） | 动态 Agent + workspace bootstrap 播种 |
 
@@ -506,6 +508,7 @@ node ./scripts/wecom-bot-selfcheck.mjs --help
 | `WECOM_ADMIN_USERS` | 管理员用户列表 |
 | `WECOM_COMMANDS_ENABLED` / `WECOM_COMMANDS_ALLOWLIST` / `WECOM_COMMANDS_REJECT_MESSAGE` | 命令白名单策略 |
 | `WECOM_DM_POLICY` / `WECOM_DM_MODE` / `WECOM_DM_ALLOW_FROM` / `WECOM_DM_REJECT_MESSAGE` | 私聊策略（支持 `WECOM_<ACCOUNT>_DM_*` 覆盖） |
+| `WECOM_EVENTS_ENABLED` / `WECOM_EVENTS_ENTER_AGENT_WELCOME_ENABLED` / `WECOM_EVENTS_ENTER_AGENT_WELCOME_TEXT` | 事件处理与 enter_agent 欢迎语（支持 `WECOM_<ACCOUNT>_EVENTS_*`） |
 | `WECOM_GROUP_CHAT_ENABLED` / `WECOM_GROUP_CHAT_REQUIRE_MENTION` / `WECOM_GROUP_CHAT_MENTION_PATTERNS` | 群触发策略 |
 | `WECOM_DEBOUNCE_ENABLED` / `WECOM_DEBOUNCE_WINDOW_MS` / `WECOM_DEBOUNCE_MAX_BATCH` | 文本防抖 |
 | `WECOM_STREAMING_ENABLED` / `WECOM_STREAMING_MIN_CHARS` / `WECOM_STREAMING_MIN_INTERVAL_MS` | Agent 增量回包 |

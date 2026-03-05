@@ -348,3 +348,15 @@ test("extractWecomXmlInboundEnvelope normalizes fields", () => {
   assert.equal(envelope.msgId, "123");
   assert.equal(envelope.content, "hello");
 });
+
+test("extractWecomXmlInboundEnvelope includes event fields", () => {
+  const envelope = extractWecomXmlInboundEnvelope({
+    MsgType: "event",
+    FromUserName: "dingxiang",
+    Event: "enter_agent",
+    EventKey: "menu-click",
+  });
+  assert.equal(envelope.msgType, "event");
+  assert.equal(envelope.eventType, "enter_agent");
+  assert.equal(envelope.eventKey, "menu-click");
+});

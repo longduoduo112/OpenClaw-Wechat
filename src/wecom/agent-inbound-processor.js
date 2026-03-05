@@ -18,6 +18,11 @@ export function createWecomAgentInboundProcessor(deps = {}) {
     resolveWecomCommandPolicy,
     resolveWecomAllowFromPolicy,
     resolveWecomDmPolicy,
+    resolveWecomEventPolicy = () => ({
+      enabled: true,
+      enterAgentWelcomeEnabled: false,
+      enterAgentWelcomeText: "",
+    }),
     isWecomSenderAllowed,
     sendWecomText,
     extractLeadingSlashCommand,
@@ -66,6 +71,7 @@ export function createWecomAgentInboundProcessor(deps = {}) {
     fromUser,
     content,
     msgType,
+    eventType,
     mediaId,
     picUrl,
     recognition,
@@ -142,6 +148,25 @@ export function createWecomAgentInboundProcessor(deps = {}) {
           isGroupChat,
         },
       });
+
+      if (String(msgType ?? "").trim().toLowerCase() === "event") {
+        const normalizedEventType = String(eventType ?? "").trim().toLowerCase();
+        const eventPolicy = resolveWecomEventPolicy(api, config.accountId || accountId, config);
+        if (!eventPolicy?.enabled) {
+          api.logger.info?.(`wecom: event skipped (disabled) type=${normalizedEventType || "unknown"}`);
+          return;
+        }
+        if (normalizedEventType === "enter_agent" && eventPolicy.enterAgentWelcomeEnabled) {
+          const welcomeText = String(eventPolicy.enterAgentWelcomeText ?? "").trim();
+          if (welcomeText) {
+            await sendTextToUser(welcomeText);
+            api.logger.info?.(`wecom: enter_agent welcome sent account=${config.accountId || accountId}`);
+          }
+          return;
+        }
+        api.logger.info?.(`wecom: event ignored type=${normalizedEventType || "unknown"}`);
+        return;
+      }
       if (!guardResult.ok) return;
       commandBody = guardResult.commandBody;
       const isAdminUser = guardResult.isAdminUser === true;
