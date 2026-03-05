@@ -20,6 +20,17 @@ function readNumber(value) {
   return Number.isFinite(num) ? num : null;
 }
 
+function normalizeTimestampMs(value) {
+  if (value == null || value === "") return null;
+  const direct = Number(value);
+  if (Number.isFinite(direct) && direct > 0) {
+    return direct < 1e12 ? Math.floor(direct * 1000) : Math.floor(direct);
+  }
+  const parsed = Date.parse(String(value));
+  if (Number.isFinite(parsed) && parsed > 0) return Math.floor(parsed);
+  return null;
+}
+
 function resolveBotCallbackConfig(cfg, accountId = "default") {
   const normalizedAccountId = readString(accountId).toLowerCase() || "default";
   const channelConfig = cfg?.channels?.wecom;
@@ -86,7 +97,10 @@ function buildWecomAccountSnapshot(account, cfg, runtime = {}) {
     runtime?.connected ??
     inboundActivity?.connected ??
     (running && configured);
-  const lastInboundAt = readString(runtime?.lastInboundAt ?? runtime?.lastInbound) || inboundActivity?.lastInboundAt || null;
+  const lastInboundAt =
+    normalizeTimestampMs(runtime?.lastInboundAt ?? runtime?.lastInbound) ??
+    normalizeTimestampMs(inboundActivity?.lastInboundAtMs ?? inboundActivity?.lastInbound) ??
+    null;
   const localizedName = accountId === "default" ? "默认账号" : accountId;
   return {
     ...runtime,
@@ -171,8 +185,10 @@ export function createWecomChannelPlugin({
           (snapshot?.running && snapshot?.configured) ??
           null,
         lastInbound:
-          readString(snapshot?.lastInboundAt ?? snapshot?.lastInbound) ||
-          getWecomChannelInboundActivity([snapshot?.accountId]).lastInboundAt ||
+          normalizeTimestampMs(snapshot?.lastInboundAt ?? snapshot?.lastInbound) ??
+          normalizeTimestampMs(
+            getWecomChannelInboundActivity([snapshot?.accountId]).lastInboundAtMs,
+          ) ??
           null,
       }),
     },

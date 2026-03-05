@@ -109,8 +109,9 @@ test("channel plugin status exposes last inbound timestamp from webhook activity
     cfg: { channels: { wecom: {} } },
     runtime: {},
   });
-  assert.ok(snapshot.lastInboundAt);
+  assert.ok(Number.isFinite(snapshot.lastInboundAt));
 
   const summary = plugin.status.buildChannelSummary({ snapshot });
   assert.equal(summary.lastInbound, snapshot.lastInboundAt);
+  assert.equal(summary.lastInbound, 1700000000 * 1000);
 });
