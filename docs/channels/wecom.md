@@ -22,6 +22,7 @@ This channel integrates OpenClaw with WeCom (企业微信) internal apps.
 - Outbound target: supports `user` / `group(chatid)` / `party(dept)` / `tag` / `webhook` (including named webhook targets)
 - Multi-account: supported (`channels.wecom.accounts`)
 - Voice recognition: WeCom `Recognition` first; local whisper fallback supported (`channels.wecom.voiceTranscription`)
+- WeCom Doc tool: supported (`wecom_doc`, built into this plugin; create/share/auth/delete/grant-access/collaborators/collect/forms/sheet-properties)
 - Delivery fallback chain: optional (`active_stream -> response_url -> webhook_bot -> agent_push`)
 - Bot card replies: supported (`channels.wecom.bot.card`, `markdown/template_card`)
 - Direct-message policy: supported (`channels.wecom.dm.mode=open|allowlist|deny`, account-level override via `accounts.<id>.dm`)
@@ -42,6 +43,65 @@ Recommended:
 Named webhook targets (optional):
 
 - Configure `channels.wecom.webhooks` (or `accounts.<id>.webhooks`) and send to `webhook:<name>`.
+
+## WeCom Doc Tool
+
+Built into the same `OpenClaw-Wechat` plugin. No separate extension is required.
+
+Config:
+
+```json
+{
+  "channels": {
+    "wecom": {
+      "defaultAccount": "docs",
+      "tools": {
+        "doc": true,
+        "docAutoGrantRequesterCollaborator": true
+      },
+      "accounts": {
+        "docs": {
+          "corpId": "wwxxxx",
+          "corpSecret": "xxxx",
+          "agentId": 1000008,
+          "tools": {
+            "doc": true
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+Supported actions:
+
+- `create`
+- `rename`
+- `get_info`
+- `share`
+- `get_auth`
+- `diagnose_auth`
+- `validate_share_link`
+- `delete`
+- `grant_access`
+- `add_collaborators`
+- `set_join_rule`
+- `set_member_auth`
+- `set_safety_setting`
+- `create_collect`
+- `modify_collect`
+- `get_form_info`
+- `get_form_answer`
+- `get_form_statistic`
+- `get_sheet_properties`
+
+Default behavior:
+
+- In WeCom sessions, `create` will automatically add the current requester as a collaborator unless `tools.docAutoGrantRequesterCollaborator=false`.
+- `diagnose_auth` will summarize member access, internal/external visibility, and whether an anonymous browser is likely to see "document not found".
+- `validate_share_link` will inspect a shared URL from a guest/browser perspective and report `blankpage`, guest identity, path resource id, and share-code-related hints.
+- `create` and `share` return the canonical `docId`; use that for later API operations instead of the share-link path segment.
 
 ## Group Chat Checklist
 

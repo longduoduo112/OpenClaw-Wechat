@@ -57,6 +57,7 @@ export function normalizeAccountConfig({ raw, accountId, normalizeWecomWebhookTa
   const webhooks = normalizeWecomWebhookTargetMap(raw.webhooks);
   const allowFrom = raw.allowFrom ?? raw.dm?.allowFrom;
   const allowFromRejectMessage = String(raw.allowFromRejectMessage ?? raw.rejectUnauthorizedMessage ?? "").trim();
+  const tools = raw.tools && typeof raw.tools === "object" && !Array.isArray(raw.tools) ? { ...raw.tools } : undefined;
 
   if (!corpId || !corpSecret || !agentId) {
     return null;
@@ -77,6 +78,7 @@ export function normalizeAccountConfig({ raw, accountId, normalizeWecomWebhookTa
     allowFrom,
     allowFromRejectMessage: allowFromRejectMessage || undefined,
     enabled: raw.enabled !== false,
+    tools,
   };
 }
 

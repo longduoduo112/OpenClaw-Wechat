@@ -108,3 +108,28 @@ test("createWecomAccountRegistry keeps account dm.allowFrom in normalized config
   });
   assert.deepEqual(account?.allowFrom, ["wecom:alice", "bob"]);
 });
+
+test("createWecomAccountRegistry does not treat tools/defaultAccount as legacy inline accounts", () => {
+  const registry = createWecomAccountRegistry({
+    normalizeWecomWebhookTargetMap,
+    resolveWecomProxyConfig: () => undefined,
+    processEnv: {},
+  });
+  const cfg = {
+    channels: {
+      wecom: {
+        corpId: "ww_default",
+        corpSecret: "secret-default",
+        agentId: 1000001,
+        defaultAccount: "default",
+        tools: {
+          doc: true,
+        },
+      },
+    },
+  };
+  const list = registry.listEnabledWecomAccounts({
+    api: { config: cfg },
+  });
+  assert.deepEqual(list.map((item) => item.accountId), ["default"]);
+});

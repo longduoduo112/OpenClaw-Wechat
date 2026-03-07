@@ -30,6 +30,7 @@ test("register logs startup and registers channel/routes", () => {
   const calls = {
     setRuntime: 0,
     registerChannel: 0,
+    registerTool: 0,
     botRoute: 0,
     agentRoutes: 0,
   };
@@ -48,6 +49,9 @@ test("register logs startup and registers channel/routes", () => {
     listEnabledWecomAccounts: () => [{ accountId: "default", enabled: true, corpId: "ww1", agentId: "1001", callbackToken: "t1" }],
     getWecomConfig: () => ({ corpId: "ww12345678", outboundProxy: "" }),
     wecomChannelPlugin: { id: "wecom" },
+    registerWecomDocTools() {
+      calls.registerTool += 1;
+    },
     wecomRouteRegistrar: {
       registerWecomBotWebhookRoute() {
         calls.botRoute += 1;
@@ -70,6 +74,7 @@ test("register logs startup and registers channel/routes", () => {
 
   assert.equal(calls.setRuntime, 1);
   assert.equal(calls.registerChannel, 1);
+  assert.equal(calls.registerTool, 1);
   assert.equal(calls.botRoute, 1);
   assert.equal(calls.agentRoutes, 1);
   assert.ok(logs.info.some((line) => line.includes("wecom: config loaded")));
@@ -90,6 +95,7 @@ test("register warns when no route available", () => {
     listEnabledWecomAccounts: () => [],
     getWecomConfig: () => null,
     wecomChannelPlugin: { id: "wecom" },
+    registerWecomDocTools() {},
     wecomRouteRegistrar: {
       registerWecomBotWebhookRoute() {
         return false;
@@ -126,6 +132,7 @@ test("register emits account diagnosis warnings for duplicate credentials", () =
     ],
     getWecomConfig: () => ({ corpId: "ww-a", outboundProxy: "" }),
     wecomChannelPlugin: { id: "wecom" },
+    registerWecomDocTools() {},
     wecomRouteRegistrar: {
       registerWecomBotWebhookRoute() {
         return false;

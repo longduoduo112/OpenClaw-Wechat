@@ -45,6 +45,21 @@ const localizedUiHints = {
     label: "WeCom 出站代理",
     placeholder: "http://127.0.0.1:7890",
   },
+  defaultAccount: {
+    label: "默认账号",
+    help: "文档工具等多账号能力未显式指定账号时优先使用该账号。",
+  },
+  tools: {
+    label: "工具能力",
+    help: "控制 OpenClaw 工具级能力是否启用。",
+  },
+  "tools.doc": {
+    label: "启用文档工具",
+  },
+  "tools.docAutoGrantRequesterCollaborator": {
+    label: "创建后自动加当前发送者为协作者",
+    help: "仅在 WeCom 会话中生效；创建文档后会把当前发送者自动加入协作者。",
+  },
   accounts: {
     label: "多账号配置",
     help: "按账户 ID 管理多套企业微信配置。",
@@ -75,6 +90,15 @@ const localizedUiHints = {
   },
   "accounts.*.webhookPath": {
     label: "账号回调路径",
+  },
+  "accounts.*.tools": {
+    label: "账号工具能力",
+  },
+  "accounts.*.tools.doc": {
+    label: "启用该账号文档工具",
+  },
+  "accounts.*.tools.docAutoGrantRequesterCollaborator": {
+    label: "自动加当前发送者为协作者",
   },
   bot: {
     label: "企业微信 Bot 模式",

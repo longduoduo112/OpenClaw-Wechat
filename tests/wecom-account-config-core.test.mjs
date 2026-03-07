@@ -152,6 +152,23 @@ test("normalizeAccountConfig supports account-level dm.allowFrom alias", () => {
   assert.deepEqual(normalized.allowFrom, ["wecom:alice", "user:bob"]);
 });
 
+test("normalizeAccountConfig keeps account-level tool flags", () => {
+  const normalized = normalizeAccountConfig({
+    raw: {
+      corpId: "ww_docs",
+      corpSecret: "docs-secret",
+      agentId: 1000088,
+      tools: {
+        doc: false,
+        docAutoGrantRequesterCollaborator: false,
+      },
+    },
+    accountId: "docs",
+    normalizeWecomWebhookTargetMap,
+  });
+  assert.deepEqual(normalized.tools, { doc: false, docAutoGrantRequesterCollaborator: false });
+});
+
 test("readAccountConfigFromEnv auto-assigns non-default webhookPath when missing", () => {
   const processEnvStub = {
     WECOM_SALES_CORP_ID: "ww_sales",

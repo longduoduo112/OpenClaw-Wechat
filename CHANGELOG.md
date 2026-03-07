@@ -4,6 +4,27 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.9.0] - 2026-03-08
+
+### Added
+- 重大更新：内置 `wecom_doc` 文档工具套件，支持文档/表格/收集表的一整套操作，不需要额外安装第二个插件
+- 新增文档基础动作：`create`、`rename`、`get_info`、`share`、`get_auth`、`delete`
+- 新增文档权限动作：`grant_access`、`add_collaborators`、`set_join_rule`、`set_member_auth`、`set_safety_setting`
+- 新增文档诊断动作：`diagnose_auth`，可直接输出企业内/企业外访问、查看成员、协作者与请求人角色判断
+- 新增分享链接诊断动作：`validate_share_link`，可从 guest 视角校验 `blankpage`、`scode`、路径资源 ID 与外部可访问性
+- 新增收集表动作：`create_collect`、`modify_collect`、`get_form_info`、`get_form_answer`、`get_form_statistic`
+- 新增表格属性动作：`get_sheet_properties`
+- 新增创建后自动授权：在企业微信会话里调用 `create` 时，默认把当前请求人自动加入协作者
+- 新增高层权限输入：创建文档时即可直接传 `viewers` / `collaborators`
+- 新增文档工具测试覆盖：文档 API client、工具注册、权限诊断、分享链接诊断、账号路由、自动授权、manifest/schema
+
+### Changed
+- `create` / `share` / `get_auth` / `diagnose_auth` 结果现在会明确返回真实 `docId`，减少把分享链接路径误当 `docId` 的误用
+- README 与 WeCom 渠道文档大幅补充文档工具说明、权限诊断说明、分享链接诊断说明和使用示例
+
+### Fixed
+- 修复 WeCom 文本格式化误伤 URL 下划线的问题：`markdownToWecomText` 现在会保留链接中的 `_`
+
 ## [1.8.0] - 2026-03-06
 
 ### Added

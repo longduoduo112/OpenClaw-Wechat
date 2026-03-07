@@ -11,6 +11,7 @@ test("createWecomPluginServices returns core runtime service bindings", () => {
   assert.equal(typeof services.deliverBotReplyText, "function");
   assert.equal(typeof services.syncWecomSessionQueuePolicy, "function");
   assert.equal(typeof services.WecomChannelPlugin, "object");
+  assert.equal(typeof services.registerWecomDocTools, "function");
   assert.equal(typeof services.readRequestBody, "function");
   assert.equal(typeof services.buildWecomBotEncryptedResponse, "function");
 });

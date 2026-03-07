@@ -42,6 +42,8 @@ const LEGACY_INLINE_ACCOUNT_RESERVED_KEYS = new Set([
   "stream",
   "observability",
   "voiceTranscription",
+  "defaultAccount",
+  "tools",
   "accounts",
   "agent",
 ]);

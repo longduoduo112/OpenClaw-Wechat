@@ -1,7 +1,7 @@
 {
   "id": "openclaw-wechat",
   "name": "OpenClaw-Wechat",
-  "version": "1.8.0",
+  "version": "1.9.0",
   "description": "WeCom (企业微信) channel plugin for OpenClaw (自建应用回调 + 发送 API).",
   "channels": [
     "wecom"
@@ -13,7 +13,7 @@
     "type": "object",
     "additionalProperties": false,
     "patternProperties": {
-      "^(?!(name|enabled|corpId|corpSecret|agentId|callbackToken|token|callbackAesKey|encodingAesKey|webhookPath|agent|bot|delivery|webhookBot|stream|observability|outboundProxy|webhooks|allowFrom|allowFromRejectMessage|adminUsers|commandAllowlist|commandBlockMessage|commands|workspaceTemplate|groupChat|dynamicAgent|dynamicAgents|dm|debounce|streaming|voiceTranscription|accounts)$)[A-Za-z0-9_-]+$": {
+      "^(?!(name|enabled|corpId|corpSecret|agentId|callbackToken|token|callbackAesKey|encodingAesKey|webhookPath|agent|bot|delivery|webhookBot|stream|observability|outboundProxy|webhooks|allowFrom|allowFromRejectMessage|adminUsers|commandAllowlist|commandBlockMessage|commands|workspaceTemplate|groupChat|dynamicAgent|dynamicAgents|dm|debounce|streaming|voiceTranscription|defaultAccount|tools|accounts)$)[A-Za-z0-9_-]+$": {
         "type": "object",
         "description": "兼容旧配置：inline 多账户（推荐迁移到 channels.wecom.accounts.<id>）"
       }
@@ -356,6 +356,28 @@
       "outboundProxy": {
         "type": "string",
         "description": "可选：WeCom 出站 API 代理（如 http://127.0.0.1:7890）"
+      },
+      "defaultAccount": {
+        "type": "string",
+        "minLength": 1,
+        "description": "默认账号 ID；文档工具等多账号能力未显式指定账号时优先使用"
+      },
+      "tools": {
+        "type": "object",
+        "description": "OpenClaw 工具能力开关",
+        "additionalProperties": false,
+        "properties": {
+          "doc": {
+            "type": "boolean",
+            "default": true,
+            "description": "是否启用企业微信文档工具（wecom_doc）"
+          },
+          "docAutoGrantRequesterCollaborator": {
+            "type": "boolean",
+            "default": true,
+            "description": "是否在 WeCom 会话里创建文档后自动把当前发送者加为协作者"
+          }
+        }
       },
       "webhooks": {
         "type": "object",
@@ -1026,6 +1048,23 @@
             "outboundProxy": {
               "type": "string",
               "description": "可选：该账户专用 WeCom 出站 API 代理（覆盖 channels.wecom.outboundProxy）"
+            },
+            "tools": {
+              "type": "object",
+              "description": "该账户专用 OpenClaw 工具能力开关（覆盖 channels.wecom.tools）",
+              "additionalProperties": false,
+              "properties": {
+                "doc": {
+                  "type": "boolean",
+                  "default": true,
+                  "description": "是否启用该账户文档工具（wecom_doc）"
+                },
+                "docAutoGrantRequesterCollaborator": {
+                  "type": "boolean",
+                  "default": true,
+                  "description": "是否在该账户下创建文档后自动把当前发送者加为协作者"
+                }
+              }
             },
             "webhooks": {
               "type": "object",

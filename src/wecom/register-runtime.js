@@ -13,6 +13,7 @@ export function createWecomRegisterRuntime({
   getWecomConfig,
   wecomChannelPlugin,
   wecomRouteRegistrar,
+  registerWecomDocTools,
 } = {}) {
   if (typeof setGatewayRuntime !== "function") {
     throw new Error("createWecomRegisterRuntime: setGatewayRuntime is required");
@@ -49,6 +50,9 @@ export function createWecomRegisterRuntime({
   }
   if (!wecomRouteRegistrar || typeof wecomRouteRegistrar !== "object") {
     throw new Error("createWecomRegisterRuntime: wecomRouteRegistrar is required");
+  }
+  if (registerWecomDocTools != null && typeof registerWecomDocTools !== "function") {
+    throw new Error("createWecomRegisterRuntime: registerWecomDocTools must be a function");
   }
 
   function register(api) {
@@ -114,6 +118,9 @@ export function createWecomRegisterRuntime({
     }
 
     api.registerChannel({ plugin: wecomChannelPlugin });
+    if (typeof registerWecomDocTools === "function") {
+      registerWecomDocTools(api);
+    }
     const botRouteRegistered = wecomRouteRegistrar.registerWecomBotWebhookRoute(api);
     const webhookGroups = wecomRouteRegistrar.registerWecomAgentWebhookRoutes(api);
     if (webhookGroups.size === 0 && !botRouteRegistered) {

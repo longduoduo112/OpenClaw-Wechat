@@ -11,13 +11,14 @@ OpenClaw-Wechat 是一个面向 OpenClaw 的企业微信渠道插件，支持两
 
 ## 目录
 
-- [重大更新（v1.8.0）](#重大更新v180)
+- [重大更新（v1.9.0）](#重大更新v190)
 - [功能概览](#功能概览)
 - [模式对比](#模式对比)
 - [5 分钟极速上手](#5-分钟极速上手)
 - [前置要求](#前置要求)
 - [安装与加载](#安装与加载)
 - [快速开始](#快速开始)
+- [文档工具（WeCom Doc）](#文档工具wecom-doc)
 - [配置参考](#配置参考)
 - [消息能力矩阵](#消息能力矩阵)
 - [命令与会话策略](#命令与会话策略)
@@ -28,9 +29,27 @@ OpenClaw-Wechat 是一个面向 OpenClaw 的企业微信渠道插件，支持两
 - [FAQ](#faq)
 - [版本与贡献](#版本与贡献)
 
-## 重大更新（v1.8.0）
+## 重大更新（v1.9.0）
 
-这次版本是一次面向日常运维体验的重大升级：**WeCom 现在支持后台可视化配置**，不再只能手改 `~/.openclaw/openclaw.json`。
+这次版本的重点不只是“能创建企微文档”，而是把 **WeCom Doc 做成一个可用、可诊断、可运维的完整工具链**。  
+现在 `OpenClaw-Wechat` 已经同时具备：
+
+- 后台可视化配置
+- WeCom Doc 文档/表格/收集表工具
+- 文档权限与协作者管理
+- 分享链接可用性诊断
+- 文档权限打不开问题的直接诊断
+- 链接文本输出完整性修复（URL 下划线不再丢失）
+
+### 这次版本解决了什么
+
+| 场景 | 旧问题 | 现在的处理方式 |
+|---|---|---|
+| 创建文档后自己打不开 | 文档创建成功，但发起人没被自动授权 | `create` 默认自动把当前企微请求人加入协作者 |
+| 分享链接能发出来，但别人打开像“文档不存在” | 无法快速判断是权限、分享码还是 guest 访问问题 | `validate_share_link` 直接诊断 `guest / blankpage / scode / 路径资源 ID` |
+| 只知道“更新成员权限成功”，但还是打不开 | 成员权限、查看规则、外部分享是三套概念，容易混淆 | `diagnose_auth` 直接输出企业内/企业外访问、查看成员、协作者与请求人角色 |
+| 把分享链接路径当成 `docId` 使用 | 后续 API 调用报 `invalid docid` | `create/share/get_auth` 结果显式返回真实 `docId`，并给出使用提示 |
+| 链接里有下划线，发出去后被改坏 | Markdown 清洗误伤 URL | 文本格式化已修复，URL 下划线完整保留 |
 
 ### 可视化配置能力（Control UI）
 
@@ -41,12 +60,23 @@ OpenClaw-Wechat 是一个面向 OpenClaw 的企业微信渠道插件，支持两
 | 敏感项标记 | ✅ | `secret/token/aesKey` 字段按敏感项展示 |
 | 状态展示 | ✅ | `Connected` 不再长期 `n/a`，默认账号显示名中文化为“默认账号” |
 | 入站状态追踪 | ✅ | 收到回调后自动更新 `Last inbound`（重启后首次入站前为 `n/a` 属正常） |
+| 文档工具开关 | ✅ | `tools.doc` 等文档相关配置可被 schema 正确识别 |
 
-### 你能直接获得的变化
+### 文档工具升级摘要
+
+| 能力层 | 新增内容 |
+|---|---|
+| 文档基础 | `create`、`rename`、`get_info`、`share`、`delete` |
+| 权限管理 | `grant_access`、`add_collaborators`、`set_join_rule`、`set_member_auth`、`set_safety_setting` |
+| 运维诊断 | `get_auth`、`diagnose_auth`、`validate_share_link` |
+| 表格/收集表 | `get_sheet_properties`、`create_collect`、`modify_collect`、`get_form_info`、`get_form_answer`、`get_form_statistic` |
+
+### 你升级后能直接获得的变化
 
 - 在 OpenClaw 后台的 `Channels -> WeCom` 页面可直接配置并保存核心参数。
-- 后台配置字段更可读，适合多人运维交接，不需要记忆旧字段名。
-- WeCom 运行状态更直观：连接状态与账号显示更准确，减少误判“插件没生效”。
+- 在同一个插件里直接调用 `wecom_doc`，不需要额外安装第二个 WeCom Doc 插件。
+- 现在排查“为什么这个链接打不开”不需要再手翻日志和原始 JSON，工具会直接给出结论。
+- 文档创建、协作者授权、分享链接诊断已经形成闭环，适合直接上线给真实企微用户使用。
 
 ## 5 分钟极速上手
 
@@ -120,6 +150,7 @@ npm run wecom:selfcheck -- --all-accounts
 | 事件欢迎语（enter_agent） | ✅ | `events.enterAgentWelcome*` 可配置 |
 | 命令白名单 | ✅ | `/help` `/status` `/clear` `/new` 等 |
 | 群聊触发策略 | ✅ | 支持 `direct/mention/keyword` 三种模式 |
+| 企业微信文档工具 | ✅ | 内置 `wecom_doc` 工具：创建/重命名/分享/权限管理/收集表/表格属性 |
 | 文本防抖合并 | ✅ | 窗口期内多条消息合并投递 |
 | 异步补发（超时后） | ✅ | transcript 轮询补发最终回复 |
 | 观测统计 | ✅ | 入站/回包/错误计数 + 最近失败样本（`/status`） |
@@ -282,6 +313,125 @@ node ./scripts/wecom-selfcheck.mjs --help
 node ./scripts/wecom-bot-selfcheck.mjs --help
 ```
 
+## 文档工具（WeCom Doc）
+
+插件现在内置了 `wecom_doc` 工具，不需要额外安装第二个插件。它复用当前 `OpenClaw-Wechat` 的账号、代理和多账户配置。
+
+### 支持的动作
+
+| action | 说明 | 关键参数 |
+|---|---|---|
+| `create` | 新建文档/表格，可创建后立即授权 | `docName` `docType` `viewers?` `collaborators?` |
+| `rename` | 重命名文档 | `docId` `newName` |
+| `get_info` | 获取文档基础信息 | `docId` |
+| `share` | 获取文档分享信息 | `docId` |
+| `get_auth` | 获取文档权限信息 | `docId` |
+| `diagnose_auth` | 诊断为什么打不开文档/链接 | `docId` |
+| `validate_share_link` | 校验分享链接对 guest/外部访问是否可用 | `shareUrl` |
+| `delete` | 删除文档或收集表 | `docId` 或 `formId` |
+| `grant_access` | 批量增删查看人/协作者 | `docId` `viewers?` `collaborators?` `remove*?` |
+| `add_collaborators` | 快速添加协作者 | `docId` `collaborators` |
+| `set_join_rule` | 修改文档可见范围/加入规则 | `docId` `request` |
+| `set_member_auth` | 修改文档通知成员与权限 | `docId` `request` |
+| `set_safety_setting` | 修改文档安全设置 | `docId` `request` |
+| `create_collect` | 创建收集表 | `formInfo` `spaceId?` `fatherId?` |
+| `modify_collect` | 修改收集表 | `oper` `formId` `formInfo` |
+| `get_form_info` | 获取收集表定义 | `formId` |
+| `get_form_answer` | 获取收集表答案 | `repeatedId` `answerIds?` |
+| `get_form_statistic` | 获取收集表统计 | `requests` |
+| `get_sheet_properties` | 获取在线表格属性 | `docId` |
+
+### 启用方式
+
+默认启用。你也可以显式配置：
+
+```json
+{
+  "channels": {
+    "wecom": {
+      "defaultAccount": "docs",
+      "tools": {
+        "doc": true,
+        "docAutoGrantRequesterCollaborator": true
+      },
+      "accounts": {
+        "docs": {
+          "corpId": "wwxxxx",
+          "corpSecret": "xxxx",
+          "agentId": 1000008,
+          "tools": {
+            "doc": true
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+### 账号选择规则
+
+`wecom_doc` 在执行时按下面顺序选择账号：
+
+1. 工具参数里的 `accountId`
+2. 当前 agent 绑定账号
+3. `channels.wecom.defaultAccount`
+4. 第一个启用了文档工具的可用账号
+
+### 创建后自动授权
+
+默认开启：如果 `wecom_doc` 是在企业微信会话里被调用，插件会把当前发送者自动加成文档协作者，避免“文档已创建但发起人无权限查看”。
+
+`create` / `share` 结果现在会明确返回真实 `docId`，后续做权限、分享和诊断时应优先使用这个 `docId`，不要直接拿分享链接路径里的片段代替。
+
+可关闭：
+
+```json
+{
+  "channels": {
+    "wecom": {
+      "tools": {
+        "doc": true,
+        "docAutoGrantRequesterCollaborator": false
+      }
+    }
+  }
+}
+```
+
+### 使用示例
+
+- “帮我新建一个企微文档，标题是《周会纪要》”
+- “把这个文档改名为《Q2 Roadmap》”
+- “查询文档 `docxxxx` 的权限信息”
+- “诊断为什么这个企微文档链接打不开”
+- “校验这个企微文档分享链接为什么对外打不开”
+- “创建一个企微文档，并把我加成协作者”
+- “给文档 `docxxxx` 添加协作者 `dingxiang`”
+- “把文档 `docxxxx` 授权给 `alice` 查看，给 `bob` 协作”
+- “把文档 `docxxxx` 的查看规则改成仅企业内部可见”
+- “创建一个收集表，标题是《报名表》”
+- “查询收集表 `formxxxx` 的定义和题目”
+- “读取这份收集表最近一次提交答案”
+- “获取这个表格的 sheet 属性”
+
+### 推荐工作流
+
+| 目标 | 推荐动作顺序 |
+|---|---|
+| 创建后立刻给业务同事协作 | `create` -> `grant_access` / `add_collaborators` |
+| 判断“为什么别人打不开这个文档” | `diagnose_auth` -> `validate_share_link` |
+| 给外部链接排障 | 先看 `validate_share_link`，再决定是否执行 `set_join_rule` |
+| 后续继续操作同一文档 | 始终使用 `create/share` 返回的真实 `docId`，不要直接复制分享链接路径片段 |
+
+### 常见误区
+
+| 误区 | 正确做法 |
+|---|---|
+| 分享链接路径里的 ID 就是 `docId` | 不一定。以后续工具返回的真实 `docId` 为准 |
+| “加了协作者”就等于任何浏览器都能打开 | 不是。协作者权限、企业内访问、企业外访问、外部分享是不同层级 |
+| 链接能在企业微信里打开，就代表外部环境也能打开 | 不成立。`guest` 视角可能仍然是 `blankpage` |
+
 ## 配置参考
 
 ### 主配置键（`channels.wecom`）
@@ -297,6 +447,8 @@ node ./scripts/wecom-bot-selfcheck.mjs --help
 | `webhookPath` | string | `/wecom/callback` | Agent 回调路径（非 default 账户未配置时自动生成 `/wecom/<accountId>/callback`） |
 | `agent` | object | - | 兼容旧配置：`agent.corpId/corpSecret/agentId`（与顶层 Agent 字段等价） |
 | `outboundProxy` | string | - | WeCom 出站代理 |
+| `defaultAccount` | string | - | 多账号下的默认账号 ID（文档工具等优先使用） |
+| `tools.doc` | boolean | `true` | 是否启用 `wecom_doc` 文档工具 |
 | `webhooks` | object | - | 命名 Webhook 目标映射（如 `{ "ops": "https://...key=xxx" }`） |
 | `accounts` | object | - | 多账户配置（支持 `accounts.<id>.bot` 独立 Bot 配置） |
 
@@ -352,6 +504,12 @@ node ./scripts/wecom-bot-selfcheck.mjs --help
 | `lateReplyWatchMs` | integer | `180000` | 超时后异步补发观察窗口 |
 | `lateReplyPollMs` | integer | `2000` | 异步补发轮询间隔 |
 | `card` | object | - | 该账户专用卡片回包配置（覆盖全局 `bot.card`） |
+
+### 多账户文档工具覆盖（`channels.wecom.accounts.<id>.tools`）
+
+| 键 | 类型 | 默认 | 说明 |
+|---|---|---|---|
+| `doc` | boolean | `true` | 是否启用该账户的 `wecom_doc` 工具 |
 | `outboundProxy` / `proxyUrl` / `proxy` | string | - | 该账户 Bot 专用代理（优先于全局） |
 
 ### 授权与指令策略

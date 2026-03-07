@@ -26,3 +26,14 @@ test("markdownToWecomText collapses excessive blank lines", () => {
   const out = markdownToWecomText("a\n\n\n\n b");
   assert.equal(out, "a\n\n b");
 });
+
+test("markdownToWecomText preserves underscores in raw urls", () => {
+  const input = "下载链接：https://example.com/foo_bar/baz_qux?file=a_b_c";
+  const out = markdownToWecomText(input);
+  assert.equal(out, input);
+});
+
+test("markdownToWecomText preserves underscores in markdown link urls", () => {
+  const out = markdownToWecomText("[下载地址](https://example.com/foo_bar/baz_qux?file=a_b_c)");
+  assert.equal(out, "下载地址 (https://example.com/foo_bar/baz_qux?file=a_b_c)");
+});

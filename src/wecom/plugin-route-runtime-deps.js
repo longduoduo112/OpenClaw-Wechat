@@ -54,6 +54,7 @@ export function createPluginRouteRuntimeDeps(context = {}) {
       listEnabledWecomAccounts: context.listEnabledWecomAccounts,
       getWecomConfig: context.getWecomConfig,
       wecomChannelPlugin: context.wecomChannelPlugin,
+      registerWecomDocTools: context.registerWecomDocTools,
     },
   };
 }

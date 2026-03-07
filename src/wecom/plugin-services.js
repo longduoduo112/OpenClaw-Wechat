@@ -42,6 +42,7 @@ import { createWecomPluginBaseServices } from "./plugin-base-services.js";
 import { createWecomPluginAccountPolicyServices } from "./plugin-account-policy-services.js";
 import { createWecomPluginDeliveryInboundServices } from "./plugin-delivery-inbound-services.js";
 import { createWecomBotInboundContentBuilder } from "./bot-inbound-content.js";
+import { createWecomDocToolRegistrar } from "./doc-tool.js";
 import { markdownToWecomText } from "./text-format.js";
 import {
   buildWecomSessionId,
@@ -124,12 +125,19 @@ export function createWecomPluginServices({
     writeFile,
     WECOM_TEMP_DIR_NAME,
   });
+  const registerWecomDocTools = createWecomDocToolRegistrar({
+    listEnabledWecomAccounts: accountPolicy.listEnabledWecomAccounts,
+    normalizeAccountId: accountPolicy.normalizeAccountId,
+    fetchWithRetry: base.fetchWithRetry,
+    getWecomAccessToken: base.getWecomAccessToken,
+  });
 
   return {
     ...base,
     ...accountPolicy,
     ...deliveryInbound,
     buildBotInboundContent,
+    registerWecomDocTools,
     ACTIVE_LATE_REPLY_WATCHERS,
     WECOM_TEMP_DIR_NAME,
     normalizePluginHttpPath,
