@@ -6,6 +6,16 @@ function assertFunction(name, value) {
   }
 }
 
+export function buildWecomBotVisibleFallbackPayload(rawText = "", markdownToWecomText = (text) => String(text ?? "")) {
+  const parsed = parseThinkingContent(rawText);
+  const visibleContent = markdownToWecomText(parsed.visibleContent).trim();
+  const thinkingContent = markdownToWecomText(parsed.thinkingContent).trim();
+  return {
+    text: visibleContent,
+    thinkingContent,
+  };
+}
+
 export async function handleWecomBotPostDispatchFallback({
   api,
   sessionId,
@@ -28,9 +38,10 @@ export async function handleWecomBotPostDispatchFallback({
   const filledFromTranscript = await tryFinishFromTranscript(dispatchStartedAt);
   if (filledFromTranscript) return false;
 
-  const parsed = parseThinkingContent(dispatchState.blockText);
-  const fallback = markdownToWecomText(parsed.visibleContent).trim();
-  const thinkingContent = markdownToWecomText(parsed.thinkingContent).trim();
+  const { text: fallback, thinkingContent } = buildWecomBotVisibleFallbackPayload(
+    dispatchState.blockText,
+    markdownToWecomText,
+  );
   if (fallback || thinkingContent) {
     await safeDeliverReply(
       {
@@ -65,6 +76,8 @@ export async function handleWecomBotDispatchError({
   runtime,
   cfg,
   routedAgentId,
+  dispatchState,
+  markdownToWecomText,
   readTranscriptFallbackResult,
   safeDeliverReply,
   markTranscriptReplyDelivered,
@@ -75,8 +88,16 @@ export async function handleWecomBotDispatchError({
   assertFunction("readTranscriptFallbackResult", readTranscriptFallbackResult);
   assertFunction("safeDeliverReply", safeDeliverReply);
   assertFunction("markTranscriptReplyDelivered", markTranscriptReplyDelivered);
+  assertFunction("markdownToWecomText", markdownToWecomText);
 
   api?.logger?.warn?.(`wecom(bot): processing failed: ${String(err?.message || err)}`);
+  if (dispatchState && typeof dispatchState === "object" && dispatchState.streamFinished !== true) {
+    const partialPayload = buildWecomBotVisibleFallbackPayload(dispatchState.blockText, markdownToWecomText);
+    if (partialPayload.text || partialPayload.thinkingContent) {
+      const delivered = await safeDeliverReply(partialPayload, "timeout-partial-fallback");
+      if (delivered) return true;
+    }
+  }
   if (isDispatchTimeoutError(err)) {
     const watcherStarted = (() => {
       try {

@@ -32,7 +32,9 @@ test("buildWecomBotInboundContextPayload builds group payload with defaults", ()
     body: "formatted",
     messageText: "raw",
     originalContent: "orig",
-    commandBody: "cmd",
+    commandBody: "/reset",
+    commandAuthorized: true,
+    commandSource: "text",
     fromAddress: "wecom-bot:dingxiang",
     sessionId: "wecom-bot:dingxiang",
     accountId: "bot",
@@ -44,8 +46,11 @@ test("buildWecomBotInboundContextPayload builds group payload with defaults", ()
   });
   assert.equal(payload.Body, "formatted");
   assert.equal(payload.BodyForAgent, "raw");
+  assert.equal(payload.BodyForCommands, "/reset");
   assert.equal(payload.RawBody, "orig");
-  assert.equal(payload.CommandBody, "cmd");
+  assert.equal(payload.CommandBody, "/reset");
+  assert.equal(payload.CommandAuthorized, true);
+  assert.equal(payload.CommandSource, "text");
   assert.equal(payload.From, "wecom-bot:dingxiang");
   assert.equal(payload.To, "wecom-bot:dingxiang");
   assert.equal(payload.SessionKey, "wecom-bot:dingxiang");

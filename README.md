@@ -1109,6 +1109,7 @@ openclaw system event --mode now --text "立即执行下一轮运维心跳"
 | 现象 | 先看什么 | 常见原因 | 处理建议 |
 |---|---|---|---|
 | 回调验证失败 | `curl https://域名/wecom/callback` | URL 不通、Token/AESKey 不一致 | 先通公网，再核对配置 |
+| `curl` 到公网回调是 `200`，但企业微信后台仍提示 `openapi回调地址请求不通过` | 企业微信后台校验 | 临时隧道域名、不受信任公网域名、企业侧域名策略或回调链路仍被中间层改写 | 优先换成稳定公网域名；不要把 `trycloudflare.com` 之类临时域名当正式 Agent 回调地址 |
 | `curl /wecom/callback` 返回 WebUI 页面 | 反向代理路由与回调路径 | 域名把 `/wecom/callback` 转发到了前端/静态站点 | 单独为 `/wecom/*` 配置反向代理到 OpenClaw 网关端口 |
 | `curl https://域名/wecom/callback` 返回 `401/403` | Gateway Auth / Zero Trust / 反代鉴权 | webhook 路径被要求登录或带 Token | 对 `/wecom/*`、`/webhooks/app*`、`/webhooks/wecom*` 做认证豁免 |
 | `curl https://域名/wecom/callback` 返回 `301/302/307/308` | 登录跳转 / SSO / 前端路由 | webhook 被重定向到登录页或前端 | 让 webhook 路径直接反代到 OpenClaw 网关 |
@@ -1205,6 +1206,20 @@ npm run wecom:bot:selfcheck -- --all-accounts
 1. 本机验证：`curl http://127.0.0.1:8885/wecom/callback`（应返回 `wecom webhook ok`）
 2. 公网验证：`curl -i https://你的域名/wecom/callback`
 3. 代理配置：为 `/wecom/*` 单独反代到 OpenClaw 网关端口，不要落到 WebUI 路由
+
+### Q5.1：为什么本机和公网 `curl` 都是 `200 wecom webhook ok`，企业微信后台仍提示 `openapi回调地址请求不通过`？
+这说明“你的路由打通了”，但**还不能证明企业微信后台会接受这条回调地址**。
+
+常见根因：
+1. 用了临时公网域名，例如 `trycloudflare.com`
+2. 企业侧要求更稳定/更受信任的公网域名
+3. 你的回调链路虽然 `curl` 是 `200`，但企业微信实际校验时仍遇到了中间层改写
+
+明确建议：
+1. 自建应用正式回调地址优先用你自己的稳定公网域名
+2. 不要把 `trycloudflare.com` 这类临时隧道域名当正式 Agent 回调地址
+3. 继续确认该域名的 `/wecom/callback` 没有鉴权、跳转、前端兜底和缓存层干扰
+4. 如果只是想快速群聊验证，Bot/Webhook 路径通常比自建应用回调更容易先跑通
 
 ### Q6：自建应用群聊怎么开？为什么群里不 @ 就不触发？
 先区分两种通道能力：

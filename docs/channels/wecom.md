@@ -63,6 +63,7 @@ Public callback checklist:
 
 - `GET /wecom/callback` should return `wecom webhook ok`
 - `GET /wecom/bot/callback` should return `wecom bot webhook ok`
+- Temporary tunnel domains such as `trycloudflare.com` are not recommended as formal Agent callback URLs; prefer a stable public domain
 - `401/403` means the path is auth-gated by Gateway Auth / Zero Trust / reverse proxy
 - `301/302/307/308` means the path is redirected to login / SSO / frontend
 - `200 + HTML` means the request hit WebUI/frontend instead of the webhook route

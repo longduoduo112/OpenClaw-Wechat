@@ -56,7 +56,7 @@ test("createWecomApiClientCore attaches and reuses proxy dispatcher", () => {
   assert.equal(created.length, 1);
 });
 
-test("createWecomApiClientCore caches access token by corpId", async () => {
+test("createWecomApiClientCore caches access token by corpId and corpSecret", async () => {
   let tokenCalls = 0;
   const core = createWecomApiClientCore({
     fetchImpl: async (url) => {
@@ -84,4 +84,33 @@ test("createWecomApiClientCore caches access token by corpId", async () => {
   assert.equal(token1, "token-core");
   assert.equal(token2, "token-core");
   assert.equal(tokenCalls, 1);
+});
+
+test("createWecomApiClientCore isolates access token cache across secrets in the same corp", async () => {
+  const calls = [];
+  const core = createWecomApiClientCore({
+    fetchImpl: async (url) => {
+      const parsed = new URL(String(url));
+      const corpSecret = parsed.searchParams.get("corpsecret");
+      calls.push(corpSecret);
+      return createJsonResponse({ errcode: 0, access_token: `token-${corpSecret}`, expires_in: 7200 });
+    },
+    proxyAgentCtor: class FakeProxyAgent {},
+    sleep: async () => {},
+  });
+
+  const tokenA = await core.getWecomAccessToken({
+    corpId: "ww-core",
+    corpSecret: "secret-a",
+    logger: { info() {}, warn() {}, error() {} },
+  });
+  const tokenB = await core.getWecomAccessToken({
+    corpId: "ww-core",
+    corpSecret: "secret-b",
+    logger: { info() {}, warn() {}, error() {} },
+  });
+
+  assert.equal(tokenA, "token-secret-a");
+  assert.equal(tokenB, "token-secret-b");
+  assert.deepEqual(calls, ["secret-a", "secret-b"]);
 });

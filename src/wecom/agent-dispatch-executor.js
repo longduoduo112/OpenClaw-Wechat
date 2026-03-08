@@ -1,5 +1,8 @@
 import { createWecomAgentDispatchHandlers } from "./agent-dispatch-handlers.js";
-import { handleWecomAgentPostDispatchFallback } from "./agent-dispatch-fallback.js";
+import {
+  finalizeWecomAgentVisiblePartialReply,
+  handleWecomAgentPostDispatchFallback,
+} from "./agent-dispatch-fallback.js";
 import { createWecomAgentLateReplyRuntime } from "./agent-late-reply-runtime.js";
 import { createWecomAgentDispatchState, resolveWecomAgentReplyRuntimePolicy } from "./agent-reply-runtime.js";
 import { createWecomAgentStreamingChunkManager } from "./agent-streaming-chunks.js";
@@ -168,6 +171,13 @@ export async function executeWecomAgentDispatchFlow({
     api?.logger?.warn?.(`wecom: dispatch failed: ${String(dispatchErr)}`);
     if (isDispatchTimeoutError(dispatchErr)) {
       dispatchState.suppressLateDispatcherDeliveries = true;
+      const finalizedVisiblePartial = await finalizeWecomAgentVisiblePartialReply({
+        api,
+        state: dispatchState,
+        flushStreamingBuffer,
+        reason: "dispatch-timeout",
+      });
+      if (finalizedVisiblePartial) return;
       await sendProgressNotice(queuedNoticeText);
       await startLateReplyWatcher("dispatch-timeout");
     } else {

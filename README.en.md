@@ -654,6 +654,7 @@ See [`docs/troubleshooting/coexistence.md`](./docs/troubleshooting/coexistence.m
 | Symptom | Check first | Typical root cause |
 |---|---|---|
 | Callback verification failed | callback URL reachability | URL/Token/AES mismatch |
+| Public `curl` returns `200`, but WeCom admin still says callback verification failed | WeCom console validation | temporary tunnel domain, untrusted public domain, or enterprise-side validation rejects the callback chain | use a stable public domain; do not use temporary domains such as `trycloudflare.com` as the formal Agent callback |
 | `curl /wecom/callback` returns WebUI page | reverse-proxy path routing | `/wecom/*` path is forwarded to frontend/static site instead of OpenClaw gateway |
 | `curl https://your-domain/wecom/callback` returns `401/403` | gateway auth / zero-trust auth | webhook path requires login or token |
 | `curl https://your-domain/wecom/callback` returns `301/302/307/308` | login redirect / SSO / frontend route | webhook path is redirected away from OpenClaw |
@@ -738,6 +739,19 @@ Quick checks:
 1. Local: `curl http://127.0.0.1:8885/wecom/callback`
 2. Public: `curl -i https://<domain>/wecom/callback`
 3. Proxy rules: route `/wecom/*` to OpenClaw gateway port, not WebUI.
+
+### Why does WeCom admin still say `openapi callback verification failed` even though both local and public `curl` return `200 wecom webhook ok`?
+That only proves your route is reachable. It does **not** prove the WeCom admin console will accept the callback URL.
+
+Common causes:
+1. You are using a temporary public tunnel domain such as `trycloudflare.com`
+2. The tenant requires a more stable/trusted public domain
+3. Your callback chain still gets rewritten by auth, redirects, frontend fallback, or edge middleware during the real WeCom-side check
+
+Recommended action:
+1. Use your own stable public domain for the self-built app callback
+2. Do not use `trycloudflare.com` as the formal Agent callback URL
+3. Re-check that `/wecom/callback` is free from auth, redirects, frontend fallback, and caching layers
 
 ### Why do two WeCom accounts seem to share one agent/session?
 This is a multi-account routing problem, not expected channel interference.

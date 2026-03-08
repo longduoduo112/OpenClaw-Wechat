@@ -4,6 +4,24 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.9.8] - 2026-03-08
+
+### Added
+- 新增 `corpId + corpSecret` 级别的 Access Token 缓存隔离回归测试，覆盖“同一企业、多个应用 Secret”场景
+- 新增 WeCom 命令上下文字段回归测试，确保插件会把 `/reset` 一类原生命令交给 OpenClaw 核心而不是当普通文本继续跑模型
+- 新增 partial reply 收尾回归测试，覆盖“已经输出部分内容，但最终 reply 缺失/超时”的 Agent 与 Bot 路径
+- FAQ / 故障排查补充“`curl 200` 但企业微信后台仍提示 `openapi回调地址请求不通过`”说明，明确不建议把 `trycloudflare.com` 这类临时域名当正式 Agent 回调地址
+
+### Changed
+- Agent / Bot 入站上下文现在会在命令已通过插件侧校验时补齐 `BodyForCommands`、`CommandAuthorized`、`CommandSource=text`，让 OpenClaw 核心原生命令链路可正确识别 `/reset`
+- README / 渠道文档补充企业微信后台 URL 验证失败的诊断口径，并把稳定公网域名作为正式建议
+
+### Fixed
+- 修复同一 `corpId` 下多个不同 `corpSecret` 复用 token cache 可能导致串 token、触发 `301002` 的问题
+- 修复 `/reset`（以及兼容别名 `/new`、`/clear`）在插件里被识别但没有进入 OpenClaw 原生命令处理链路的问题
+- 修复 Agent partial 已输出但最终 reply 缺失时仍继续等待/超时的问题；现在会直接收口当前可见内容，不再追加误导性的超时提示
+- 修复 Bot 已输出 block 内容但最终 reply 超时时仍回落为纯 timeout 文案的问题；现在会优先把当前可见内容作为最终结果交付
+
 ## [1.9.7] - 2026-03-08
 
 ### Added

@@ -32,7 +32,9 @@ test("buildWecomInboundContextPayload builds direct context payload", () => {
     body: "formatted",
     messageText: "raw",
     originalContent: "orig",
-    commandBody: "cmd",
+    commandBody: "/reset",
+    commandAuthorized: true,
+    commandSource: "text",
     fromAddress: "wecom:dingxiang",
     sessionId: "wecom:dingxiang",
     accountId: "default",
@@ -44,8 +46,11 @@ test("buildWecomInboundContextPayload builds direct context payload", () => {
   });
   assert.equal(payload.Body, "formatted");
   assert.equal(payload.BodyForAgent, "raw");
+  assert.equal(payload.BodyForCommands, "/reset");
   assert.equal(payload.RawBody, "orig");
-  assert.equal(payload.CommandBody, "cmd");
+  assert.equal(payload.CommandBody, "/reset");
+  assert.equal(payload.CommandAuthorized, true);
+  assert.equal(payload.CommandSource, "text");
   assert.equal(payload.From, "wecom:dingxiang");
   assert.equal(payload.To, "wecom:dingxiang");
   assert.equal(payload.SessionKey, "wecom:dingxiang");
@@ -60,4 +65,23 @@ test("buildWecomInboundContextPayload builds direct context payload", () => {
   assert.equal(payload.Timestamp, 456);
   assert.equal(payload.OriginatingChannel, "wecom");
   assert.equal(payload.OriginatingTo, "wecom:dingxiang");
+});
+
+test("buildWecomInboundContextPayload keeps command fields disabled for normal text", () => {
+  const payload = buildWecomInboundContextPayload({
+    body: "formatted",
+    messageText: "hello",
+    originalContent: "hello",
+    commandBody: "hello",
+    fromAddress: "wecom:dingxiang",
+    sessionId: "wecom:dingxiang",
+    accountId: "default",
+    isGroupChat: false,
+    chatId: "",
+    fromUser: "dingxiang",
+  });
+
+  assert.equal(payload.BodyForCommands, "");
+  assert.equal(payload.CommandAuthorized, false);
+  assert.equal(payload.CommandSource, "");
 });

@@ -4,6 +4,25 @@ function assertFunction(name, value) {
   }
 }
 
+export async function finalizeWecomAgentVisiblePartialReply({
+  api,
+  state,
+  flushStreamingBuffer,
+  reason = "partial-finalize",
+} = {}) {
+  if (!state || typeof state !== "object") {
+    throw new Error("finalizeWecomAgentVisiblePartialReply: state is required");
+  }
+  assertFunction("flushStreamingBuffer", flushStreamingBuffer);
+  if (state.hasDeliveredReply || !state.hasDeliveredPartialReply) return false;
+
+  await flushStreamingBuffer({ force: true, reason });
+  await state.streamChunkSendChain;
+  state.hasDeliveredReply = true;
+  api?.logger?.info?.(`wecom: finalized visible partial reply (${reason})`);
+  return true;
+}
+
 export async function handleWecomAgentPostDispatchFallback({
   api,
   state,
@@ -31,6 +50,10 @@ export async function handleWecomAgentPostDispatchFallback({
   if (streamingEnabled) {
     await flushStreamingBuffer({ force: true, reason: "post-dispatch" });
     await state.streamChunkSendChain;
+  }
+
+  if (await finalizeWecomAgentVisiblePartialReply({ api, state, flushStreamingBuffer, reason: "post-dispatch" })) {
+    return;
   }
 
   if (!state.hasDeliveredReply && !state.hasDeliveredPartialReply) {

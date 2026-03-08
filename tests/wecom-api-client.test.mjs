@@ -115,7 +115,7 @@ test("attachWecomProxyDispatcher attaches dispatcher for wecom api or forced pro
   assert.equal(fakeProxyInstances.length, 1);
 });
 
-test("getWecomAccessToken caches token per corpId", async () => {
+test("getWecomAccessToken caches token per corpId and corpSecret", async () => {
   let tokenCalls = 0;
   const fetchImpl = async (url) => {
     if (String(url).includes("/gettoken?")) {
@@ -141,6 +141,36 @@ test("getWecomAccessToken caches token per corpId", async () => {
   assert.equal(t1, "cached-token");
   assert.equal(t2, "cached-token");
   assert.equal(tokenCalls, 1);
+});
+
+test("getWecomAccessToken does not reuse token across different corp secrets", async () => {
+  const calls = [];
+  const fetchImpl = async (url) => {
+    if (String(url).includes("/gettoken?")) {
+      const parsed = new URL(String(url));
+      const corpSecret = parsed.searchParams.get("corpsecret");
+      calls.push(corpSecret);
+      return createJsonResponse({ errcode: 0, access_token: `token-${corpSecret}`, expires_in: 7200 });
+    }
+    return createJsonResponse({ errcode: 0 });
+  };
+
+  const { client } = createClient({ fetchImpl });
+
+  const t1 = await client.getWecomAccessToken({
+    corpId: "ww-1",
+    corpSecret: "secret-a",
+    logger: { info() {}, warn() {}, error() {} },
+  });
+  const t2 = await client.getWecomAccessToken({
+    corpId: "ww-1",
+    corpSecret: "secret-b",
+    logger: { info() {}, warn() {}, error() {} },
+  });
+
+  assert.equal(t1, "token-secret-a");
+  assert.equal(t2, "token-secret-b");
+  assert.deepEqual(calls, ["secret-a", "secret-b"]);
 });
 
 test("sendWecomText splits chunks and sends each chunk", async () => {

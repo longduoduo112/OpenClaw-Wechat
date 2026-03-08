@@ -16,6 +16,7 @@ export async function executeWecomBotDispatchRuntime({
   api,
   runtime,
   cfg,
+  flowState,
   ctxPayload,
   streamId,
   accountId = "default",
@@ -48,6 +49,9 @@ export async function executeWecomBotDispatchRuntime({
   let readTranscriptFallbackResult = async () => ({ text: "", transcriptMessageId: "" });
 
   const dispatchState = createWecomBotDispatchState();
+  if (flowState && typeof flowState === "object") {
+    flowState.dispatchState = dispatchState;
+  }
   const replyRuntimePolicy = resolveWecomBotReplyRuntimePolicy({ botModeConfig });
   const readTranscriptFallback = ensureTranscriptFallbackReader();
   assertFunction("readTranscriptFallback", readTranscriptFallback);

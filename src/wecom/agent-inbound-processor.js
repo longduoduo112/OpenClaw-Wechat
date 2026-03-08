@@ -209,6 +209,7 @@ export function createWecomAgentInboundProcessor(deps = {}) {
         msgId,
         messageText,
         commandBody,
+        commandAuthorized: Boolean(extractLeadingSlashCommand(commandBody)),
         originalContent,
         fromAddress,
         accountId: config.accountId || "default",
