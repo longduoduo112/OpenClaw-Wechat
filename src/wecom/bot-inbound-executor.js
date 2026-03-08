@@ -62,6 +62,7 @@ export async function executeWecomBotInboundFlow(payload = {}) {
     ACTIVE_LATE_REPLY_WATCHERS,
     ensureLateReplyWatcherRunner,
     ensureTranscriptFallbackReader,
+    resetWecomConversationSession,
   } = payload;
 
   assertWecomBotInboundFlowDeps({
@@ -139,6 +140,31 @@ export async function executeWecomBotInboundFlow(payload = {}) {
     state.commandBody = commandGuardResult.commandBody;
     if (!commandGuardResult.ok) {
       safeFinishStream(commandGuardResult.finishText);
+      return;
+    }
+    const commandKey = msgType === "text" ? extractLeadingSlashCommand(state.commandBody) : "";
+    if (commandKey === "/reset") {
+      if (typeof resetWecomConversationSession !== "function") {
+        safeFinishStream("当前会话重置能力未启用，请联系管理员。");
+        return;
+      }
+      await resetWecomConversationSession({
+        api,
+        runtime,
+        cfg,
+        baseSessionId: state.baseSessionId,
+        fromUser,
+        chatId,
+        isGroupChat,
+        commandBody: state.commandBody,
+        accountId: state.accountId,
+        groupChatPolicy: state.groupChatPolicy,
+        dynamicAgentPolicy: state.dynamicAgentPolicy,
+        isAdminUser: state.isAdminUser,
+        resolveWecomAgentRoute,
+        activeLateReplyWatchers: ACTIVE_LATE_REPLY_WATCHERS,
+      });
+      safeFinishStream("会话已重置。请继续发送你的新问题。");
       return;
     }
 

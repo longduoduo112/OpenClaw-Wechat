@@ -48,6 +48,7 @@ export function createWecomAgentInboundProcessor(deps = {}) {
     isAgentFailureText,
     scheduleTempFileCleanup,
     ACTIVE_LATE_REPLY_WATCHERS,
+    resetWecomConversationSession,
   } = deps;
 
   let lateReplyWatcherRunner = null;
@@ -107,8 +108,8 @@ export function createWecomAgentInboundProcessor(deps = {}) {
       const baseSessionId = buildWecomSessionId(fromUser, config.accountId || accountId || "default");
       let sessionId = baseSessionId;
       let routedAgentId = "";
-      const fromAddress = `wecom:${fromUser}`;
       const normalizedFromUser = String(fromUser ?? "").trim().toLowerCase();
+      const fromAddress = `wecom:${normalizedFromUser}`;
       const originalContent = content || "";
       let commandBody = originalContent;
       const groupChatPolicy = resolveWecomGroupChatPolicy(api);
@@ -170,6 +171,33 @@ export function createWecomAgentInboundProcessor(deps = {}) {
       if (!guardResult.ok) return;
       commandBody = guardResult.commandBody;
       const isAdminUser = guardResult.isAdminUser === true;
+      const commandKey = msgType === "text" ? extractLeadingSlashCommand(commandBody) : "";
+
+      if (commandKey === "/reset") {
+        if (typeof resetWecomConversationSession !== "function") {
+          api.logger.warn?.("wecom: local /reset requested but resetWecomConversationSession is unavailable");
+          await sendTextToUser("当前会话重置能力未启用，请联系管理员。");
+          return;
+        }
+        await resetWecomConversationSession({
+          api,
+          runtime,
+          cfg,
+          baseSessionId,
+          fromUser,
+          chatId,
+          isGroupChat,
+          commandBody,
+          accountId: config.accountId || accountId || "default",
+          groupChatPolicy,
+          dynamicAgentPolicy,
+          isAdminUser,
+          resolveWecomAgentRoute,
+          activeLateReplyWatchers: ACTIVE_LATE_REPLY_WATCHERS,
+        });
+        await sendTextToUser("会话已重置。请继续发送你的新问题。");
+        return;
+      }
 
       const inboundResult = await buildInboundContent({
         api,

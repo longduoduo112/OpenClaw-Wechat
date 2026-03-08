@@ -44,6 +44,7 @@ import { createWecomPluginDeliveryInboundServices } from "./plugin-delivery-inbo
 import { createWecomBotInboundContentBuilder } from "./bot-inbound-content.js";
 import { createWecomBotLongConnectionManager } from "./bot-long-connection-manager.js";
 import { createWecomDocToolRegistrar } from "./doc-tool.js";
+import { createWecomSessionResetter } from "./session-reset.js";
 import { markdownToWecomText } from "./text-format.js";
 import {
   buildWecomSessionId,
@@ -134,6 +135,7 @@ export function createWecomPluginServices({
     fetchWithRetry: base.fetchWithRetry,
     getWecomAccessToken: base.getWecomAccessToken,
   });
+  const { resetWecomConversationSession } = createWecomSessionResetter();
   const wecomBotLongConnectionManager = createWecomBotLongConnectionManager({
     attachWecomProxyDispatcher: base.attachWecomProxyDispatcher,
     resolveWecomBotConfigs: accountPolicy.resolveWecomBotConfigs,
@@ -157,6 +159,7 @@ export function createWecomPluginServices({
     ...deliveryInbound,
     buildBotInboundContent,
     registerWecomDocTools,
+    resetWecomConversationSession,
     setWecomBotLongConnectionInboundProcessor: wecomBotLongConnectionManager.setProcessBotInboundHandler,
     resolveWecomBotLongConnectionReplyContext: wecomBotLongConnectionManager.resolveReplyContext,
     pushWecomBotLongConnectionStreamUpdate: wecomBotLongConnectionManager.pushStreamUpdate,

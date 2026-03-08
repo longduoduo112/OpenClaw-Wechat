@@ -67,6 +67,23 @@ test("buildWecomInboundContextPayload builds direct context payload", () => {
   assert.equal(payload.OriginatingTo, "wecom:dingxiang");
 });
 
+test("buildWecomInboundContextPayload normalizes SenderId to lowercase", () => {
+  const payload = buildWecomInboundContextPayload({
+    body: "formatted",
+    messageText: "raw",
+    originalContent: "orig",
+    commandBody: "",
+    fromAddress: "wecom:dingxiang",
+    sessionId: "wecom:dingxiang",
+    accountId: "default",
+    isGroupChat: false,
+    fromUser: "DingXiang",
+  });
+
+  assert.equal(payload.SenderName, "DingXiang");
+  assert.equal(payload.SenderId, "dingxiang");
+});
+
 test("buildWecomInboundContextPayload keeps command fields disabled for normal text", () => {
   const payload = buildWecomInboundContextPayload({
     body: "formatted",

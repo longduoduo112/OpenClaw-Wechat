@@ -107,6 +107,7 @@ export function createWecomBotInboundFlowState({
   const runtime = api.runtime;
   const cfg = api.config;
   const normalizedAccountId = String(accountId ?? "default").trim().toLowerCase() || "default";
+  const normalizedFromUser = String(fromUser ?? "").trim().toLowerCase();
   const baseSessionId = buildWecomBotSessionId(fromUser, normalizedAccountId);
   const state = {
     runtime,
@@ -116,8 +117,10 @@ export function createWecomBotInboundFlowState({
     sessionId: baseSessionId,
     routedAgentId: "",
     fromAddress:
-      normalizedAccountId === "default" ? `wecom-bot:${fromUser}` : `wecom-bot:${normalizedAccountId}:${fromUser}`,
-    normalizedFromUser: String(fromUser ?? "").trim().toLowerCase(),
+      normalizedAccountId === "default"
+        ? `wecom-bot:${normalizedFromUser}`
+        : `wecom-bot:${normalizedAccountId}:${normalizedFromUser}`,
+    normalizedFromUser,
     originalContent: String(content ?? ""),
     commandBody: String(content ?? ""),
     dispatchStartedAt: Date.now(),

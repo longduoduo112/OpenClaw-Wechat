@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.9.9] - 2026-03-09
+
+### Changed
+- WeCom `/reset`、`/new`、`/clear` 不再依赖 OpenClaw 核心的“重置后再起一个模型启动回合”流程；插件现在会直接在本地完成会话重置并立即回复确认文本
+- WeCom Agent / Bot 入站上下文中的 `SenderId` 统一归一化为小写，和 `SessionKey`、动态路由、会话存储的大小写口径保持一致
+
+### Fixed
+- 修复企业微信里发送 `/reset`、`/new`、`/clear` 时仍继续进入普通消息分发，最终落成 `late reply watcher timed out after 180000ms` 的问题
+- 修复 `/new`、`/clear` 虽然已转换为 `/reset`，但没有真正清理当前 WeCom 会话状态的问题
+- 修复历史会话 origin / delivery 字段中 `DingXiang` 与 `dingxiang` 混用导致的 WeCom 会话身份不一致问题
+
 ## [1.9.8] - 2026-03-08
 
 ### Added

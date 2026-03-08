@@ -34,6 +34,7 @@ export function buildWecomBotInboundContextPayload({
   msgId,
   timestamp = Date.now(),
 } = {}) {
+  const normalizedSenderId = String(fromUser ?? "").trim().toLowerCase();
   return {
     Body: body,
     BodyForAgent: messageText,
@@ -49,7 +50,7 @@ export function buildWecomBotInboundContextPayload({
     ChatType: isGroupChat ? "group" : "direct",
     ConversationLabel: isGroupChat && chatId ? `group:${chatId}` : fromUser,
     SenderName: fromUser,
-    SenderId: fromUser,
+    SenderId: normalizedSenderId,
     Provider: "wecom",
     Surface: "wecom-bot",
     MessageSid: msgId || `wecom-bot-${timestamp}`,

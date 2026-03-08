@@ -66,3 +66,18 @@ test("buildWecomBotInboundContextPayload builds group payload with defaults", ()
   assert.equal(payload.OriginatingChannel, "wecom");
   assert.equal(payload.OriginatingTo, "wecom-bot:dingxiang");
 });
+
+test("buildWecomBotInboundContextPayload normalizes SenderId to lowercase", () => {
+  const payload = buildWecomBotInboundContextPayload({
+    body: "formatted",
+    messageText: "raw",
+    originalContent: "orig",
+    commandBody: "",
+    fromAddress: "wecom-bot:dingxiang",
+    sessionId: "wecom-bot:dingxiang",
+    fromUser: "DingXiang",
+  });
+
+  assert.equal(payload.SenderName, "DingXiang");
+  assert.equal(payload.SenderId, "dingxiang");
+});
