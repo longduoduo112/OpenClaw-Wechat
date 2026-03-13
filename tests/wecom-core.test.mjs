@@ -910,7 +910,7 @@ test("resolveWecomDeliveryFallbackConfig defaults and normalization", () => {
     envVars: {},
     processEnv: {},
   });
-  assert.equal(defaults.enabled, false);
+  assert.equal(defaults.enabled, true);
   assert.deepEqual(defaults.order, ["long_connection", "active_stream", "response_url", "webhook_bot", "agent_push"]);
 
   const configured = core.resolveWecomDeliveryFallbackConfig({

@@ -63,6 +63,7 @@ export async function executeWecomBotInboundFlow(payload = {}) {
     ensureLateReplyWatcherRunner,
     ensureTranscriptFallbackReader,
     resetWecomConversationSession,
+    clearSessionStoreEntry,
   } = payload;
 
   assertWecomBotInboundFlowDeps({
@@ -253,6 +254,7 @@ export async function executeWecomBotInboundFlow(payload = {}) {
       ensureTranscriptFallbackReader,
       ensureLateReplyWatcherRunner,
       withTimeout,
+      clearSessionStoreEntry,
     });
     startLateReplyWatcher = dispatchResult.startLateReplyWatcher;
     readTranscriptFallbackResult = dispatchResult.readTranscriptFallbackResult;

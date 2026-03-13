@@ -98,7 +98,7 @@ export function createVoiceTranscriptionProcessRuntime({
     return available;
   }
 
-  async function resolveLocalWhisperCommand({ voiceConfig, logger }) {
+  function listLocalWhisperCommandCandidates({ voiceConfig } = {}) {
     const provider = String(voiceConfig?.provider ?? "").trim().toLowerCase();
     const explicitCommand = String(voiceConfig?.command ?? "").trim();
     const fallbackCandidates =
@@ -110,33 +110,105 @@ export function createVoiceTranscriptionProcessRuntime({
     const candidates = explicitCommand ? [explicitCommand, ...fallbackCandidates] : fallbackCandidates;
 
     if (candidates.length === 0) {
-      throw new Error(
-        `unsupported voice transcription provider: ${provider || "unknown"} (supported: local-whisper-cli/local-whisper)`,
-      );
+      return {
+        provider,
+        explicitCommand,
+        candidates: [],
+        error: `unsupported voice transcription provider: ${provider || "unknown"} (supported: local-whisper-cli/local-whisper)`,
+      };
     }
 
-    for (const cmd of candidates) {
+    return {
+      provider,
+      explicitCommand,
+      candidates,
+      error: "",
+    };
+  }
+
+  async function resolveLocalWhisperCommand({ voiceConfig, logger }) {
+    const resolution = listLocalWhisperCommandCandidates({ voiceConfig });
+    if (resolution.error) {
+      throw new Error(resolution.error);
+    }
+
+    for (const cmd of resolution.candidates) {
       // eslint-disable-next-line no-await-in-loop
       if (await checkCommandAvailable(cmd)) {
-        if (explicitCommand && cmd !== explicitCommand) {
-          logger?.warn?.(`wecom: voice command ${explicitCommand} unavailable, fallback to ${cmd}`);
+        if (resolution.explicitCommand && cmd !== resolution.explicitCommand) {
+          logger?.warn?.(`wecom: voice command ${resolution.explicitCommand} unavailable, fallback to ${cmd}`);
         }
         return cmd;
       }
     }
 
-    throw new Error(`local transcription command not found: ${candidates.join(" / ")}`);
+    const checkedList = resolution.candidates.join(" / ");
+    throw new Error(
+      `local transcription command not found: checked ${checkedList}. ` +
+        "Confirm the command is installed and available in PATH for the OpenClaw runtime.",
+    );
+  }
+
+  async function inspectVoiceTranscriptionRuntime({ voiceConfig, logger } = {}) {
+    const resolution = listLocalWhisperCommandCandidates({ voiceConfig });
+    const commandChecks = [];
+    for (const cmd of resolution.candidates) {
+      // eslint-disable-next-line no-await-in-loop
+      const available = await checkCommandAvailable(cmd);
+      commandChecks.push({ command: cmd, available });
+    }
+    const resolvedCommand = commandChecks.find((item) => item.available)?.command || "";
+    const ffmpegEnabled = voiceConfig?.ffmpegEnabled !== false;
+    const ffmpegAvailable = ffmpegEnabled ? await ensureFfmpegAvailable(logger) : false;
+    const provider = String(voiceConfig?.provider ?? "").trim().toLowerCase();
+    const requireModelPath = provider === "local-whisper-cli" && voiceConfig?.requireModelPath !== false;
+    const modelPath = String(voiceConfig?.modelPath ?? "").trim();
+    const issues = [];
+    if (!voiceConfig?.enabled) {
+      issues.push("voice transcription disabled");
+    }
+    if (resolution.error) {
+      issues.push(resolution.error);
+    }
+    if (resolution.candidates.length > 0 && !resolvedCommand) {
+      issues.push(`no available command in PATH: ${resolution.candidates.join(" / ")}`);
+    }
+    if (requireModelPath && !modelPath) {
+      issues.push("voiceTranscription.modelPath is required for local-whisper-cli");
+    }
+    if (ffmpegEnabled && !ffmpegAvailable) {
+      issues.push("ffmpeg not available");
+    }
+
+    return {
+      enabled: voiceConfig?.enabled === true,
+      provider,
+      explicitCommand: resolution.explicitCommand || "",
+      commandCandidates: resolution.candidates,
+      commandChecks,
+      resolvedCommand,
+      ffmpegEnabled,
+      ffmpegAvailable,
+      requireModelPath,
+      modelPathConfigured: Boolean(modelPath),
+      modelPath,
+      issues,
+    };
   }
 
   assertFunction("runProcessWithTimeout", runProcessWithTimeout);
   assertFunction("checkCommandAvailable", checkCommandAvailable);
   assertFunction("ensureFfmpegAvailable", ensureFfmpegAvailable);
+  assertFunction("listLocalWhisperCommandCandidates", listLocalWhisperCommandCandidates);
   assertFunction("resolveLocalWhisperCommand", resolveLocalWhisperCommand);
+  assertFunction("inspectVoiceTranscriptionRuntime", inspectVoiceTranscriptionRuntime);
 
   return {
     runProcessWithTimeout,
     checkCommandAvailable,
     ensureFfmpegAvailable,
+    listLocalWhisperCommandCandidates,
     resolveLocalWhisperCommand,
+    inspectVoiceTranscriptionRuntime,
   };
 }

@@ -35,6 +35,7 @@ export function createWecomVoiceTranscriber({
     checkCommandAvailable,
     ensureFfmpegAvailable,
     resolveLocalWhisperCommand,
+    inspectVoiceTranscriptionRuntime,
   } = processRuntime;
 
   function resolveWecomVoiceTranscriptionConfig(api) {
@@ -232,10 +233,20 @@ export function createWecomVoiceTranscriber({
     }
   }
 
+  async function inspectWecomVoiceTranscriptionRuntime({ api, voiceConfig } = {}) {
+    const resolvedConfig = voiceConfig ?? resolveWecomVoiceTranscriptionConfig(api);
+    return inspectVoiceTranscriptionRuntime({
+      voiceConfig: resolvedConfig,
+      logger: api?.logger,
+    });
+  }
+
   return {
     resolveWecomVoiceTranscriptionConfig,
     transcribeInboundVoice,
+    inspectWecomVoiceTranscriptionRuntime,
     __internal: {
+      inspectVoiceTranscriptionRuntime,
       resolveLocalWhisperCommand,
       checkCommandAvailable,
       ensureFfmpegAvailable,

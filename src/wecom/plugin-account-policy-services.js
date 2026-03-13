@@ -107,7 +107,8 @@ export function createWecomPluginAccountPolicyServices({
     processEnv,
   });
 
-  const { resolveWecomVoiceTranscriptionConfig, transcribeInboundVoice } = createWecomVoiceTranscriber({
+  const { resolveWecomVoiceTranscriptionConfig, transcribeInboundVoice, inspectWecomVoiceTranscriptionRuntime } =
+    createWecomVoiceTranscriber({
     tempDirName: WECOM_TEMP_DIR_NAME,
     resolveVoiceTranscriptionConfig,
     normalizeAudioContentType,
@@ -124,6 +125,7 @@ export function createWecomPluginAccountPolicyServices({
     listWebhookTargetAliases,
     listAllWebhookTargetAliases,
     resolveWecomVoiceTranscriptionConfig,
+    inspectWecomVoiceTranscriptionRuntime,
     resolveWecomCommandPolicy,
     resolveWecomAllowFromPolicy,
     resolveWecomDmPolicy,
@@ -165,6 +167,7 @@ export function createWecomPluginAccountPolicyServices({
     resolveWecomObservabilityPolicy,
     resolveWecomDynamicAgentPolicy,
     resolveWecomVoiceTranscriptionConfig,
+    inspectWecomVoiceTranscriptionRuntime,
     transcribeInboundVoice,
     COMMANDS,
     buildWecomBotHelpText,

@@ -106,9 +106,11 @@ test("startLateReplyWatcher dispatches late transcript text", async () => {
 
 test("startLateReplyWatcher failure fallback sends timeout text", async () => {
   const deliverCalls = [];
+  const cleared = [];
   const state = createWecomBotDispatchState();
+  const logger = { info() {}, warn() {} };
   const runtime = createWecomBotLateReplyRuntime({
-    logger: { info() {}, warn() {} },
+    logger,
     sessionId: "wecom-bot:user-c",
     sessionRuntimeId: "runtime-c",
     msgId: "msg-c",
@@ -127,6 +129,10 @@ test("startLateReplyWatcher failure fallback sends timeout text", async () => {
       await options.onFailureFallback("late reply watcher timed out after 60000ms");
     },
     activeWatchers: new Map(),
+    clearSessionStoreEntry: async (options) => {
+      cleared.push(options);
+      return { cleared: true };
+    },
     now: () => 7000,
     randomToken: () => "token84",
   });
@@ -137,4 +143,11 @@ test("startLateReplyWatcher failure fallback sends timeout text", async () => {
   assert.equal(deliverCalls.length, 1);
   assert.equal(deliverCalls[0].reason, "late-timeout-fallback");
   assert.equal(deliverCalls[0].text, "抱歉，当前模型请求超时或网络不稳定，请稍后重试。");
+  assert.deepEqual(cleared, [
+    {
+      storePath: "/tmp/store",
+      sessionKey: "wecom-bot:user-c",
+      logger,
+    },
+  ]);
 });

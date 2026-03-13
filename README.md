@@ -12,7 +12,7 @@ OpenClaw-Wechat 是一个面向 OpenClaw 的企业微信渠道插件，支持两
 
 ## 目录
 
-- [重大更新（v1.9.7）](#重大更新v197)
+- [重大更新（v2.0.0）](#重大更新v200)
 - [功能概览](#功能概览)
 - [模式对比](#模式对比)
 - [5 分钟极速上手](#5-分钟极速上手)
@@ -33,7 +33,7 @@ OpenClaw-Wechat 是一个面向 OpenClaw 的企业微信渠道插件，支持两
 - [FAQ](#faq)
 - [版本与贡献](#版本与贡献)
 
-## 重大更新（v1.9.7）
+## 重大更新（v2.0.0）
 
 这次是一次真正的能力级更新，不是小修补。  
 `OpenClaw-Wechat` 现在已经把 **企业微信智能机器人长连接** 正式做成可用能力，并且已经在真实网关环境下完成：
@@ -112,6 +112,8 @@ OpenClaw-Wechat 是一个面向 OpenClaw 的企业微信渠道插件，支持两
 ```bash
 openclaw plugins install @dingxiang-me/openclaw-wechat
 ```
+
+> 最低建议版本：`2.0.0`。如果 `openclaw.json` 里的 `plugins.installs.openclaw-wechat` 仍显示 `1.7.x`，请先升级或重装；旧包不会正确注册 `wecom` channel 元数据。
 
 如果你是在本地开发或要直接跑仓库源码，再用下面这套：
 
@@ -433,6 +435,8 @@ node ./scripts/wecom-bot-selfcheck.mjs --help
 ## 文档工具（WeCom Doc）
 
 插件现在内置了 `wecom_doc` 工具，不需要额外安装第二个插件。它复用当前 `OpenClaw-Wechat` 的账号、代理和多账户配置。
+
+当前 `wecom_doc` 重点覆盖创建、权限、分享、收集表和诊断能力；**不包含富文本正文编辑器式的文档内容编辑**。如果需要改正文，请先在产品描述里明确这是后续能力，不要按“已支持编辑”对外承诺。
 
 ### 支持的动作
 

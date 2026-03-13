@@ -40,6 +40,7 @@ export async function executeWecomBotDispatchRuntime({
   ensureTranscriptFallbackReader,
   ensureLateReplyWatcherRunner,
   withTimeout,
+  clearSessionStoreEntry,
 } = {}) {
   assertFunction("ensureTranscriptFallbackReader", ensureTranscriptFallbackReader);
   assertFunction("ensureLateReplyWatcherRunner", ensureLateReplyWatcherRunner);
@@ -73,6 +74,7 @@ export async function executeWecomBotDispatchRuntime({
     safeDeliverReply,
     runLateReplyWatcher,
     activeWatchers: ACTIVE_LATE_REPLY_WATCHERS,
+    clearSessionStoreEntry,
   });
   readTranscriptFallbackResult = lateReplyRuntime.readTranscriptFallbackResult;
   const tryFinishFromTranscript = lateReplyRuntime.tryFinishFromTranscript;

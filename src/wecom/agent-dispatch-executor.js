@@ -44,6 +44,7 @@ export async function executeWecomAgentDispatchFlow({
   ensureLateReplyWatcherRunner,
   ACTIVE_LATE_REPLY_WATCHERS,
   sendTextToUser,
+  clearSessionStoreEntry,
 } = {}) {
   assertFunction("resolveWecomReplyStreamingPolicy", resolveWecomReplyStreamingPolicy);
   assertFunction("asNumber", asNumber);
@@ -93,6 +94,7 @@ export async function executeWecomAgentDispatchFlow({
     sendTextToUser,
     ensureLateReplyWatcherRunner,
     activeWatchers: ACTIVE_LATE_REPLY_WATCHERS,
+    clearSessionStoreEntry,
     logger: api?.logger,
   });
   const sendProgressNotice = lateReplyRuntime.sendProgressNotice;

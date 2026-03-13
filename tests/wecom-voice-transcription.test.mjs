@@ -61,6 +61,35 @@ test("resolveLocalWhisperCommand falls back when explicit command unavailable", 
   assert.equal(command, "whisper");
 });
 
+test("inspectWecomVoiceTranscriptionRuntime reports missing command and ffmpeg", async () => {
+  const transcriber = createTranscriber({
+    checkCommandAvailableImpl: async () => false,
+  });
+
+  const info = await transcriber.inspectWecomVoiceTranscriptionRuntime({
+    api: { logger: { warn() {} } },
+    voiceConfig: {
+      enabled: true,
+      provider: "local-whisper-cli",
+      command: "custom-whisper",
+      ffmpegEnabled: true,
+      requireModelPath: true,
+      modelPath: "",
+    },
+  });
+
+  assert.equal(info.enabled, true);
+  assert.equal(info.resolvedCommand, "");
+  assert.equal(info.ffmpegAvailable, false);
+  assert.deepEqual(
+    info.commandCandidates,
+    ["custom-whisper", "whisper-cli"],
+  );
+  assert.match(info.issues.join(" | "), /no available command in PATH/);
+  assert.match(info.issues.join(" | "), /modelPath is required/);
+  assert.match(info.issues.join(" | "), /ffmpeg not available/);
+});
+
 test("transcribeInboundVoice throws when disabled", async () => {
   const transcriber = createTranscriber();
   await assert.rejects(

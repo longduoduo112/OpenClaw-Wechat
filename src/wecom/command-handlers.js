@@ -7,6 +7,7 @@ export function createWecomCommandHandlers({
   listWebhookTargetAliases,
   listAllWebhookTargetAliases,
   resolveWecomVoiceTranscriptionConfig,
+  inspectWecomVoiceTranscriptionRuntime = async () => null,
   resolveWecomCommandPolicy,
   resolveWecomAllowFromPolicy,
   resolveWecomDmPolicy,
@@ -37,6 +38,9 @@ export function createWecomCommandHandlers({
   }
   if (typeof resolveWecomVoiceTranscriptionConfig !== "function") {
     throw new Error("createWecomCommandHandlers: resolveWecomVoiceTranscriptionConfig is required");
+  }
+  if (typeof inspectWecomVoiceTranscriptionRuntime !== "function") {
+    throw new Error("createWecomCommandHandlers: inspectWecomVoiceTranscriptionRuntime is required");
   }
   if (typeof resolveWecomCommandPolicy !== "function") {
     throw new Error("createWecomCommandHandlers: resolveWecomCommandPolicy is required");
@@ -96,6 +100,7 @@ export function createWecomCommandHandlers({
     const accountIds = listWecomAccountIds(api);
     const webhookTargetAliases = listWebhookTargetAliases(config);
     const voiceConfig = resolveWecomVoiceTranscriptionConfig(api);
+    const voiceRuntimeInfo = await inspectWecomVoiceTranscriptionRuntime({ api, voiceConfig });
     const commandPolicy = resolveWecomCommandPolicy(api);
     const allowFromPolicy = resolveWecomAllowFromPolicy(api, config?.accountId, config);
     const dmPolicy = resolveWecomDmPolicy(api, config?.accountId, config);
@@ -116,6 +121,7 @@ export function createWecomCommandHandlers({
       webhookTargetAliases,
       pluginVersion,
       voiceConfig,
+      voiceRuntimeInfo,
       commandPolicy,
       allowFromPolicy,
       dmPolicy,

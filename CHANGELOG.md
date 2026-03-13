@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-03-13
+
+### Changed
+- 统一仓库、插件清单和运行时内置版本号到 `2.0.0`，避免安装后状态页仍显示旧版本
+- WeCom Bot 回包兜底链路默认改为开启，默认顺序保持 `long_connection -> active_stream -> response_url -> webhook_bot -> agent_push`
+- `wecom:selfcheck` / `wecom:bot:selfcheck` 现在会检查 `plugins.installs.openclaw-wechat` 版本，发现仍停留在 `1.7.x` 一类旧包时直接提示升级
+
+### Fixed
+- 修复 Agent XML 解析时自动数值化导致前导零丢失的问题
+- 修复本地 npm 包、`openclaw.plugin.json` 与运行时常量版本不一致的问题
+- 改进本地语音转写错误信息，命令缺失时会明确提示检查的命令列表和 PATH
+
 ## [1.9.9] - 2026-03-09
 
 ### Changed

@@ -20,6 +20,14 @@ test("request parsers decode xml/json payload", () => {
   assert.equal(parseIncomingJson(""), null);
 });
 
+test("request parsers preserve leading zero fields in xml", () => {
+  const { parseIncomingXml } = createWecomRequestParsers();
+  assert.deepEqual(parseIncomingXml("<xml><FromUserName>00123</FromUserName><AgentID>000045</AgentID></xml>"), {
+    FromUserName: "00123",
+    AgentID: "000045",
+  });
+});
+
 test("readRequestBody reads request stream", async () => {
   const { readRequestBody } = createWecomRequestParsers();
   const req = createMockReq();

@@ -47,6 +47,7 @@ export function createPluginProcessingDeps(context = {}) {
       scheduleTempFileCleanup: context.scheduleTempFileCleanup,
       ACTIVE_LATE_REPLY_WATCHERS: context.ACTIVE_LATE_REPLY_WATCHERS,
       resetWecomConversationSession: context.resetWecomConversationSession,
+      clearSessionStoreEntry: context.clearSessionStoreEntry,
     },
     agentInboundDeps: {
       getWecomConfig: context.getWecomConfig,
@@ -86,6 +87,7 @@ export function createPluginProcessingDeps(context = {}) {
       scheduleTempFileCleanup: context.scheduleTempFileCleanup,
       ACTIVE_LATE_REPLY_WATCHERS: context.ACTIVE_LATE_REPLY_WATCHERS,
       resetWecomConversationSession: context.resetWecomConversationSession,
+      clearSessionStoreEntry: context.clearSessionStoreEntry,
     },
     textSchedulerDeps: {
       resolveWecomGroupChatPolicy: context.resolveWecomGroupChatPolicy,

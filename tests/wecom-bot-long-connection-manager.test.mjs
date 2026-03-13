@@ -58,6 +58,15 @@ class FakeWebSocket {
   }
 }
 
+class FakeProxyAgent {
+  static instances = [];
+
+  constructor(proxyUrl) {
+    this.proxyUrl = proxyUrl;
+    FakeProxyAgent.instances.push(this);
+  }
+}
+
 function createLogger() {
   return {
     info() {},
@@ -189,4 +198,51 @@ test("bot long connection subscribes, receives push, and sends stream replies", 
   assert.equal(ws.sent[2].body.stream.id, streamId);
   assert.equal(ws.sent[2].body.stream.content, "最终回复");
   assert.equal(ws.sent[2].body.stream.finish, true);
+});
+
+test("bot long connection passes proxy agent to ws when proxy is configured", () => {
+  FakeWebSocket.instances.length = 0;
+  FakeProxyAgent.instances.length = 0;
+
+  const manager = createWecomBotLongConnectionManager({
+    attachWecomProxyDispatcher: (_url, options) => options,
+    resolveWecomBotConfigs: () => [
+      {
+        accountId: "default",
+        enabled: true,
+        placeholderText: "处理中",
+        longConnection: {
+          enabled: true,
+          botId: "bot-123",
+          secret: "secret-xyz",
+          url: "wss://example.test/longconn",
+        },
+      },
+    ],
+    resolveWecomBotProxyConfig: () => "http://127.0.0.1:6152",
+    parseWecomBotInboundMessage,
+    describeWecomBotParsedMessage,
+    buildWecomBotSessionId: (fromUser, accountId) => `wecom-bot:${accountId}:${fromUser}`,
+    createBotStream: () => {},
+    upsertBotResponseUrlCache: () => {},
+    markInboundMessageSeen: () => true,
+    messageProcessLimiter: {
+      execute(fn) {
+        return Promise.resolve().then(fn);
+      },
+    },
+    executeInboundTaskWithSessionQueue: async ({ task }) => task(),
+    deliverBotReplyText: async () => ({ ok: true }),
+    webSocketCtor: FakeWebSocket,
+    wsProxyAgentCtor: FakeProxyAgent,
+  });
+
+  manager.sync({
+    logger: createLogger(),
+  });
+
+  assert.equal(FakeWebSocket.instances.length, 1);
+  assert.equal(FakeProxyAgent.instances.length, 1);
+  assert.equal(FakeProxyAgent.instances[0].proxyUrl, "http://127.0.0.1:6152");
+  assert.equal(FakeWebSocket.instances[0].options.agent, FakeProxyAgent.instances[0]);
 });

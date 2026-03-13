@@ -93,3 +93,45 @@ test("wecom-selfcheck resolves agent blocks and legacy inline accounts in --all-
     assert.equal(configCheck?.ok, true, `${accountId} should resolve`);
   }
 });
+
+test("wecom-selfcheck flags stale npm install metadata", async () => {
+  const tempDir = await mkdtemp(path.join(os.tmpdir(), "wecom-selfcheck-"));
+  const configPath = path.join(tempDir, "openclaw.json");
+  const config = {
+    plugins: {
+      allow: ["openclaw-wechat"],
+      entries: {
+        "openclaw-wechat": { enabled: true },
+      },
+      installs: {
+        "openclaw-wechat": {
+          version: "1.7.2",
+          resolvedVersion: "1.7.2",
+        },
+      },
+    },
+    channels: {
+      wecom: {
+        agent: buildAgentBlock(1001),
+      },
+    },
+  };
+  await writeFile(configPath, `${JSON.stringify(config, null, 2)}\n`, "utf8");
+
+  const result = await runSelfcheck([
+    "--config",
+    configPath,
+    "--skip-network",
+    "--skip-local-webhook",
+    "--json",
+  ]);
+
+  assert.equal(result.code, 1);
+  const report = JSON.parse(result.stdout);
+  const versionCheck = report?.accounts?.[0]?.checks?.find(
+    (item) => item?.name === "plugins.install.openclaw-wechat.version",
+  );
+  assert.ok(versionCheck);
+  assert.equal(versionCheck.ok, false);
+  assert.match(versionCheck.detail, /expected>=2\.0\.0/);
+});

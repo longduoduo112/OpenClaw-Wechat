@@ -120,6 +120,43 @@ test("wecom-bot-selfcheck rejects --url with --all-accounts", async () => {
   assert.match(result.stderr, /cannot be used with --all-accounts/i);
 });
 
+test("wecom-bot-selfcheck flags stale npm install metadata", async () => {
+  const tempDir = await mkdtemp(path.join(os.tmpdir(), "wecom-bot-selfcheck-"));
+  const configPath = path.join(tempDir, "openclaw.json");
+  const config = {
+    plugins: {
+      allow: ["openclaw-wechat"],
+      entries: {
+        "openclaw-wechat": { enabled: true },
+      },
+      installs: {
+        "openclaw-wechat": {
+          version: "1.7.2",
+          resolvedVersion: "1.7.2",
+        },
+      },
+    },
+    channels: {
+      wecom: {
+        bot: {
+          enabled: false,
+        },
+      },
+    },
+  };
+  await writeFile(configPath, `${JSON.stringify(config, null, 2)}\n`, "utf8");
+
+  const result = await runBotSelfcheck(["--config", configPath, "--json"]);
+  assert.equal(result.code, 1);
+  const report = JSON.parse(result.stdout);
+  const versionCheck = report?.accounts?.[0]?.checks?.find(
+    (item) => item?.name === "plugins.install.openclaw-wechat.version",
+  );
+  assert.ok(versionCheck);
+  assert.equal(versionCheck.ok, false);
+  assert.match(versionCheck.detail, /expected>=2\.0\.0/);
+});
+
 test("wecom-bot-selfcheck performs URL verify check", async (t) => {
   const token = "bot-selfcheck-token";
   const aesKey = Buffer.alloc(32, 7).toString("base64").replace(/=+$/g, "");

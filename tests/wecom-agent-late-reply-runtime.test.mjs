@@ -58,6 +58,66 @@ test("sendFailureFallback sets delivered state and sends reason text", async () 
   assert.match(sent[0], /dispatch timeout/);
 });
 
+test("sendFailureFallback auto-resets timed out session", async () => {
+  const sent = [];
+  const cleared = [];
+  const logger = { info() {}, warn() {} };
+  const runtime = createWecomAgentLateReplyRuntime({
+    dispatchState: createDispatchState(),
+    sessionId: "wecom:user-timeout",
+    msgId: "m-timeout",
+    transcriptSessionId: "session-timeout",
+    accountId: "default",
+    storePath: "/tmp/store-timeout",
+    lateReplyWatchMs: 60000,
+    lateReplyPollMs: 1000,
+    sendTextToUser: async (text) => sent.push(String(text)),
+    ensureLateReplyWatcherRunner: () => async () => {},
+    activeWatchers: new Map(),
+    clearSessionStoreEntry: async (options) => {
+      cleared.push(options);
+      return { cleared: true };
+    },
+    logger,
+  });
+
+  assert.equal(await runtime.sendFailureFallback("late reply watcher timed out after 180000ms"), true);
+  assert.equal(sent.length, 1);
+  assert.deepEqual(cleared, [
+    {
+      storePath: "/tmp/store-timeout",
+      sessionKey: "wecom:user-timeout",
+      logger,
+    },
+  ]);
+});
+
+test("sendFailureFallback keeps session when reason is not timeout", async () => {
+  let cleared = 0;
+  const logger = { info() {}, warn() {} };
+  const runtime = createWecomAgentLateReplyRuntime({
+    dispatchState: createDispatchState(),
+    sessionId: "wecom:user-error",
+    msgId: "m-error",
+    transcriptSessionId: "session-error",
+    accountId: "default",
+    storePath: "/tmp/store-error",
+    lateReplyWatchMs: 60000,
+    lateReplyPollMs: 1000,
+    sendTextToUser: async () => {},
+    ensureLateReplyWatcherRunner: () => async () => {},
+    activeWatchers: new Map(),
+    clearSessionStoreEntry: async () => {
+      cleared += 1;
+      return { cleared: true };
+    },
+    logger,
+  });
+
+  assert.equal(await runtime.sendFailureFallback("upstream fetch failed"), true);
+  assert.equal(cleared, 0);
+});
+
 test("startLateReplyWatcher starts once and forwards late text", async () => {
   const sent = [];
   const state = createDispatchState();

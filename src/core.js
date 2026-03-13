@@ -1277,7 +1277,7 @@ export function resolveWecomDeliveryFallbackConfig({
     fallbackConfig.enabled,
     parseBooleanLike(
       envVars?.WECOM_DELIVERY_FALLBACK_ENABLED,
-      parseBooleanLike(processEnv?.WECOM_DELIVERY_FALLBACK_ENABLED, false),
+      parseBooleanLike(processEnv?.WECOM_DELIVERY_FALLBACK_ENABLED, true),
     ),
   );
   const order = uniqueDeliveryFallbackOrder(

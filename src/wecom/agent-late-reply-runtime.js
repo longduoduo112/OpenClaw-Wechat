@@ -4,6 +4,13 @@ function assertFunction(name, value) {
   }
 }
 
+function isTimeoutLikeReason(reason) {
+  return String(reason?.message || reason || "")
+    .trim()
+    .toLowerCase()
+    .includes("timed out");
+}
+
 export function createWecomAgentLateReplyRuntime({
   dispatchState,
   sessionId,
@@ -16,6 +23,7 @@ export function createWecomAgentLateReplyRuntime({
   sendTextToUser,
   ensureLateReplyWatcherRunner,
   activeWatchers,
+  clearSessionStoreEntry = null,
   now = () => Date.now(),
   randomToken = () => Math.random().toString(36).slice(2, 8),
   logger,
@@ -29,6 +37,24 @@ export function createWecomAgentLateReplyRuntime({
   assertFunction("randomToken", randomToken);
 
   let lateReplyWatcherPromise = null;
+
+  const autoResetTimedOutSession = async (reason) => {
+    if (typeof clearSessionStoreEntry !== "function" || !isTimeoutLikeReason(reason)) return false;
+    try {
+      const result = await clearSessionStoreEntry({
+        storePath,
+        sessionKey: sessionId,
+        logger,
+      });
+      logger?.info?.(
+        `wecom: auto-reset timed out session=${sessionId} cleared=${result?.cleared === true ? "yes" : "no"}`,
+      );
+      return result?.cleared === true;
+    } catch (err) {
+      logger?.warn?.(`wecom: failed to auto-reset timed out session=${sessionId}: ${String(err?.message || err)}`);
+      return false;
+    }
+  };
 
   const sendProgressNotice = async (text = "") => {
     const noticeText = String(text ?? "").trim();
@@ -45,7 +71,11 @@ export function createWecomAgentLateReplyRuntime({
     if (dispatchState.hasDeliveredReply) return false;
     dispatchState.hasDeliveredReply = true;
     const reasonText = String(reason ?? "unknown").slice(0, 160);
-    await sendTextToUser(`抱歉，当前模型请求超时或网络不稳定，请稍后重试。\n故障信息: ${reasonText}`);
+    try {
+      await sendTextToUser(`抱歉，当前模型请求超时或网络不稳定，请稍后重试。\n故障信息: ${reasonText}`);
+    } finally {
+      await autoResetTimedOutSession(reasonText);
+    }
     return true;
   };
 

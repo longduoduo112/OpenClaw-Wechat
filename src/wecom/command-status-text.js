@@ -54,6 +54,32 @@ function buildObservabilityStatusLines(observabilityMetrics = {}) {
   };
 }
 
+function buildVoiceStatusLine(voiceConfig = {}, voiceRuntimeInfo = null) {
+  if (!voiceConfig?.enabled) {
+    return "⚠️ 语音消息转写回退未启用（仅使用企业微信 Recognition）";
+  }
+
+  const modelLabel = voiceConfig.modelPath || voiceConfig.model || "未配置";
+  const baseLine = `✅ 语音消息转写（本地 ${voiceConfig.provider}，模型: ${modelLabel}）`;
+  if (!voiceRuntimeInfo || typeof voiceRuntimeInfo !== "object") {
+    return baseLine;
+  }
+
+  const commandState = voiceRuntimeInfo.resolvedCommand
+    ? `命令 ${voiceRuntimeInfo.resolvedCommand}`
+    : `命令缺失（检查 ${voiceRuntimeInfo.commandCandidates?.join(" / ") || "未配置"}）`;
+  const ffmpegState = voiceRuntimeInfo.ffmpegEnabled
+    ? voiceRuntimeInfo.ffmpegAvailable
+      ? "ffmpeg 已安装"
+      : "ffmpeg 缺失"
+    : "ffmpeg 未启用";
+  const issueSuffix =
+    Array.isArray(voiceRuntimeInfo.issues) && voiceRuntimeInfo.issues.length > 0
+      ? `；问题：${voiceRuntimeInfo.issues.join("；")}`
+      : "";
+  return `${baseLine}（${commandState}，${ffmpegState}）${issueSuffix}`;
+}
+
 export function buildAgentStatusText({
   fromUser,
   config,
@@ -61,6 +87,7 @@ export function buildAgentStatusText({
   webhookTargetAliases,
   pluginVersion,
   voiceConfig,
+  voiceRuntimeInfo,
   commandPolicy,
   allowFromPolicy,
   dmPolicy,
@@ -75,9 +102,7 @@ export function buildAgentStatusText({
   observabilityMetrics,
 } = {}) {
   const proxyEnabled = Boolean(config?.outboundProxy);
-  const voiceStatusLine = voiceConfig.enabled
-    ? `✅ 语音消息转写（本地 ${voiceConfig.provider}，模型: ${voiceConfig.modelPath || voiceConfig.model}）`
-    : "⚠️ 语音消息转写回退未启用（仅使用企业微信 Recognition）";
+  const voiceStatusLine = buildVoiceStatusLine(voiceConfig, voiceRuntimeInfo);
   const commandPolicyLine = commandPolicy.enabled
     ? `✅ 指令白名单已启用（${commandPolicy.allowlist.length} 条，管理员 ${commandPolicy.adminUsers.length} 人）`
     : "ℹ️ 指令白名单未启用";

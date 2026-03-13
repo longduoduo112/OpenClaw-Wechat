@@ -49,6 +49,7 @@ export function createWecomAgentInboundProcessor(deps = {}) {
     scheduleTempFileCleanup,
     ACTIVE_LATE_REPLY_WATCHERS,
     resetWecomConversationSession,
+    clearSessionStoreEntry,
   } = deps;
 
   let lateReplyWatcherRunner = null;
@@ -286,6 +287,7 @@ export function createWecomAgentInboundProcessor(deps = {}) {
         ensureLateReplyWatcherRunner,
         ACTIVE_LATE_REPLY_WATCHERS,
         sendTextToUser,
+        clearSessionStoreEntry,
       });
     } catch (err) {
       await handleWecomAgentInboundError({ api, err, sendTextToUser });

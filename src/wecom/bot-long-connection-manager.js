@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import { HttpsProxyAgent } from "https-proxy-agent";
 import WebSocket from "ws";
 import { markWecomInboundActivity, setWecomConnectionState } from "./channel-status-state.js";
 
@@ -29,6 +30,25 @@ function normalizeLongConnectionUrl(value) {
   if (!normalized) return DEFAULT_LONG_CONNECTION_URL;
   if (normalized === LEGACY_LONG_CONNECTION_URL) return DEFAULT_LONG_CONNECTION_URL;
   return normalized;
+}
+
+function isLikelyHttpProxyUrl(proxyUrl) {
+  return /^https?:\/\/\S+$/i.test(String(proxyUrl ?? "").trim());
+}
+
+function sanitizeProxyForLog(proxyUrl) {
+  const raw = String(proxyUrl ?? "").trim();
+  if (!raw) return "";
+  try {
+    const parsed = new URL(raw);
+    if (parsed.username || parsed.password) {
+      parsed.username = "***";
+      parsed.password = "***";
+    }
+    return parsed.toString();
+  } catch {
+    return raw;
+  }
 }
 
 function normalizeReplyContext(context = {}) {
@@ -132,6 +152,7 @@ export function createWecomBotLongConnectionManager({
   recordInboundMetric = () => {},
   recordRuntimeErrorMetric = () => {},
   webSocketCtor = WebSocket,
+  wsProxyAgentCtor = HttpsProxyAgent,
   setTimeoutFn = setTimeout,
   clearTimeoutFn = clearTimeout,
   setIntervalFn = setInterval,
@@ -155,11 +176,16 @@ export function createWecomBotLongConnectionManager({
   if (typeof webSocketCtor !== "function") {
     throw new Error("createWecomBotLongConnectionManager: webSocketCtor is required");
   }
+  if (typeof wsProxyAgentCtor !== "function") {
+    throw new Error("createWecomBotLongConnectionManager: wsProxyAgentCtor is required");
+  }
 
   let processBotInboundMessage = null;
   const clients = new Map();
   const streamContexts = new Map();
   const sessionContexts = new Map();
+  const wsProxyAgentCache = new Map();
+  const invalidProxyCache = new Set();
 
   function setProcessBotInboundHandler(handler) {
     processBotInboundMessage = typeof handler === "function" ? handler : null;
@@ -215,6 +241,30 @@ export function createWecomBotLongConnectionManager({
     const normalized = String(randomUuid() || "").trim();
     if (normalized) return `${normalizedPrefix}_${normalized}`;
     return `${normalizedPrefix}_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+  }
+
+  function resolveWebSocketOptions(client, api) {
+    const proxyUrl = String(client?.proxyUrl ?? "").trim();
+    if (!proxyUrl) return undefined;
+    const printableProxy = sanitizeProxyForLog(proxyUrl);
+    if (!isLikelyHttpProxyUrl(proxyUrl)) {
+      if (!invalidProxyCache.has(proxyUrl)) {
+        invalidProxyCache.add(proxyUrl);
+        api?.logger?.warn?.(
+          `wecom(bot-longconn): proxy ignored for websocket account=${client.accountId} proxy=${printableProxy}`,
+        );
+      }
+      return undefined;
+    }
+    let agent = wsProxyAgentCache.get(proxyUrl);
+    if (!agent) {
+      agent = new wsProxyAgentCtor(proxyUrl);
+      wsProxyAgentCache.set(proxyUrl, agent);
+      api?.logger?.info?.(
+        `wecom(bot-longconn): websocket proxy enabled account=${client.accountId} proxy=${printableProxy}`,
+      );
+    }
+    return { agent };
   }
 
   function getClient(accountId = "default") {
@@ -729,16 +779,18 @@ export function createWecomBotLongConnectionManager({
     });
     const wsUrl = normalizeLongConnectionUrl(client?.config?.longConnection?.url ?? DEFAULT_LONG_CONNECTION_URL);
     const proxyUrl = String(client?.proxyUrl ?? "").trim();
-    attachWecomProxyDispatcher(wsUrl, { forceProxy: true }, { proxyUrl, logger: api?.logger });
+    let wsOptions;
+    try {
+      wsOptions = resolveWebSocketOptions(client, api);
+    } catch (err) {
+      api?.logger?.warn?.(
+        `wecom(bot-longconn): websocket proxy init failed account=${client.accountId}: ${String(err?.message || err)}`,
+      );
+    }
     api?.logger?.info?.(
       `wecom(bot-longconn): connect attempt account=${client.accountId} marker=${LONG_CONNECTION_RUNTIME_MARKER} url=${wsUrl} proxy=${proxyUrl || "direct"} wsCtor=${String(webSocketCtor?.name || "unknown")}`,
     );
-    if (proxyUrl) {
-      api?.logger?.debug?.(
-        `wecom(bot-longconn): outboundProxy configured for account=${client.accountId}; current ws runtime uses direct WebSocket dialing`,
-      );
-    }
-    client.ws = new webSocketCtor(wsUrl);
+    client.ws = new webSocketCtor(wsUrl, [], wsOptions);
     client.connected = false;
     client.socketOpen = false;
     client.subscribeReqId = "";

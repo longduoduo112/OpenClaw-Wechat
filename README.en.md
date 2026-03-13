@@ -10,7 +10,7 @@ OpenClaw-Wechat is an OpenClaw channel plugin for Enterprise WeChat (WeCom), wit
 
 ## Table of Contents
 
-- [Major Update (v1.9.7)](#major-update-v197)
+- [Major Update (v2.0.0)](#major-update-v200)
 - [Highlights](#highlights)
 - [Mode Comparison](#mode-comparison)
 - [5-Minute Quick Start](#5-minute-quick-start)
@@ -28,7 +28,7 @@ OpenClaw-Wechat is an OpenClaw channel plugin for Enterprise WeChat (WeCom), wit
 - [Development](#development)
 - [FAQ](#faq)
 
-## Major Update (v1.9.7)
+## Major Update (v2.0.0)
 
 This is a real capability update, not a minor patch.  
 `OpenClaw-Wechat` now has **working WeCom Bot long-connection support** in real gateway runtime.
@@ -102,6 +102,8 @@ This release also keeps the earlier operations improvements: **WeCom supports vi
 ```bash
 openclaw plugins install @dingxiang-me/openclaw-wechat
 ```
+
+Recommended minimum package version: `2.0.0`. If `plugins.installs.openclaw-wechat` in `openclaw.json` still reports `1.7.x`, upgrade or reinstall first; those older npm packages do not expose the current WeCom channel metadata.
 
 For local development or direct source-path loading, use:
 
@@ -185,6 +187,8 @@ npm run wecom:bot:selfcheck -- --all-accounts
 ```bash
 openclaw plugins install @dingxiang-me/openclaw-wechat
 ```
+
+If your installed runtime still shows `1.7.x`, reinstall before debugging config; old packages can fail with `unknown channel id: wecom`.
 
 This installs the package under `~/.openclaw/extensions/openclaw-wechat/`. Treat that directory as installed runtime package content, not as your primary business configuration surface.
 

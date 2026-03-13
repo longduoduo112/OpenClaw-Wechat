@@ -14,6 +14,13 @@ function createHandlers(overrides = {}) {
     listWebhookTargetAliases: () => ["ops"],
     listAllWebhookTargetAliases: () => ["ops", "alerts"],
     resolveWecomVoiceTranscriptionConfig: () => ({ enabled: true, provider: "local-whisper", model: "base", modelPath: "" }),
+    inspectWecomVoiceTranscriptionRuntime: async () => ({
+      resolvedCommand: "whisper",
+      commandCandidates: ["whisper"],
+      ffmpegEnabled: true,
+      ffmpegAvailable: true,
+      issues: [],
+    }),
     resolveWecomCommandPolicy: () => ({ enabled: true, allowlist: ["/help"], adminUsers: ["u1"] }),
     resolveWecomAllowFromPolicy: () => ({ allowFrom: ["u1"] }),
     resolveWecomDmPolicy: () => ({ mode: "open", allowFrom: [] }),
@@ -61,6 +68,7 @@ test("/status command sends status text", async () => {
   assert.equal(sent.length, 1);
   assert.match(sent[0].text, /插件版本：0\.5\.3/);
   assert.match(sent[0].text, /命名 Webhook 目标/);
+  assert.match(sent[0].text, /命令 whisper/);
   assert.match(sent[0].text, /微信插件入口联系人：Agent 模式可见/);
 });
 

@@ -4,6 +4,7 @@ const DEFAULT_XML_PARSER_OPTIONS = {
   ignoreAttributes: false,
   trimValues: true,
   processEntities: false, // 防止 XXE
+  parseTagValue: false, // 保留前导零，避免 FromUserName/MsgId 等字段被自动转数值
 };
 
 export const DEFAULT_MAX_REQUEST_BODY_SIZE = 1024 * 1024;

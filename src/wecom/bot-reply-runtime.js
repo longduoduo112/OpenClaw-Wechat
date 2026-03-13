@@ -4,6 +4,13 @@ function assertFunction(name, value) {
   }
 }
 
+function isTimeoutLikeReason(reason) {
+  return String(reason?.message || reason || "")
+    .trim()
+    .toLowerCase()
+    .includes("timed out");
+}
+
 export function createWecomBotDispatchState() {
   return {
     blockText: "",
@@ -49,6 +56,7 @@ export function createWecomBotLateReplyRuntime({
   safeDeliverReply,
   runLateReplyWatcher,
   activeWatchers,
+  clearSessionStoreEntry = null,
   now = () => Date.now(),
   randomToken = () => Math.random().toString(36).slice(2, 8),
 } = {}) {
@@ -63,6 +71,24 @@ export function createWecomBotLateReplyRuntime({
   assertFunction("randomToken", randomToken);
 
   let lateReplyWatcherPromise = null;
+
+  const autoResetTimedOutSession = async (reason) => {
+    if (typeof clearSessionStoreEntry !== "function" || !isTimeoutLikeReason(reason)) return false;
+    try {
+      const result = await clearSessionStoreEntry({
+        storePath,
+        sessionKey: sessionId,
+        logger,
+      });
+      logger?.info?.(
+        `wecom(bot): auto-reset timed out session=${sessionId} cleared=${result?.cleared === true ? "yes" : "no"}`,
+      );
+      return result?.cleared === true;
+    } catch (err) {
+      logger?.warn?.(`wecom(bot): failed to auto-reset timed out session=${sessionId}: ${String(err?.message || err)}`);
+      return false;
+    }
+  };
 
   const readTranscriptFallbackResult = async ({
     runtimeStorePath = storePath,
@@ -128,12 +154,16 @@ export function createWecomBotLateReplyRuntime({
         if (dispatchState.streamFinished) return;
         const reasonText = String(watchErr?.message || watchErr || "");
         const isTimeout = reasonText.includes("timed out");
-        await safeDeliverReply(
-          isTimeout
-            ? "抱歉，当前模型请求超时或网络不稳定，请稍后重试。"
-            : `抱歉，当前模型请求超时或网络不稳定，请稍后重试。\n故障信息: ${reasonText.slice(0, 160)}`,
-          isTimeout ? "late-timeout-fallback" : "late-watcher-error",
-        );
+        try {
+          await safeDeliverReply(
+            isTimeout
+              ? "抱歉，当前模型请求超时或网络不稳定，请稍后重试。"
+              : `抱歉，当前模型请求超时或网络不稳定，请稍后重试。\n故障信息: ${reasonText.slice(0, 160)}`,
+            isTimeout ? "late-timeout-fallback" : "late-watcher-error",
+          );
+        } finally {
+          await autoResetTimedOutSession(reasonText);
+        }
       },
     }).finally(() => {
       lateReplyWatcherPromise = null;

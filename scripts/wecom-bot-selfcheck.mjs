@@ -4,6 +4,7 @@ import crypto from "node:crypto";
 import { readFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { PLUGIN_VERSION } from "../src/wecom/plugin-constants.js";
 import { diagnoseWecomCallbackHealth } from "../src/wecom/callback-health-diagnostics.js";
 
 function parseArgs(argv) {
@@ -116,6 +117,25 @@ function pickFirstNonEmptyString(...values) {
     if (text) return text;
   }
   return "";
+}
+
+function parseSemverLike(version) {
+  const normalized = String(version ?? "").trim();
+  if (!normalized) return null;
+  const matched = normalized.match(/^v?(\d+)\.(\d+)\.(\d+)/);
+  if (!matched) return null;
+  return matched.slice(1).map((value) => Number.parseInt(value, 10));
+}
+
+function compareSemverLike(left, right) {
+  const a = parseSemverLike(left);
+  const b = parseSemverLike(right);
+  if (!a || !b) return null;
+  for (let index = 0; index < 3; index += 1) {
+    if (a[index] === b[index]) continue;
+    return a[index] > b[index] ? 1 : -1;
+  }
+  return 0;
 }
 
 function parseBooleanLike(value, fallback = false) {
@@ -266,6 +286,9 @@ function buildPluginChecks(config) {
   const allow = Array.isArray(plugins?.allow) ? plugins.allow.map((value) => String(value)) : null;
   const allowConfigured = Array.isArray(allow);
   const allowIncludesPlugin = allowConfigured && allow.includes("openclaw-wechat");
+  const installMeta = plugins?.installs?.["openclaw-wechat"] ?? {};
+  const installedVersion = pickFirstNonEmptyString(installMeta?.resolvedVersion, installMeta?.version);
+  const versionCompare = installedVersion ? compareSemverLike(installedVersion, PLUGIN_VERSION) : null;
 
   checks.push(
     makeCheck(
@@ -289,6 +312,16 @@ function buildPluginChecks(config) {
         ? `allow includes openclaw-wechat=${allowIncludesPlugin}`
         : "plugins.allow missing (should be explicit allowlist)",
       allowConfigured ? { allow } : null,
+    ),
+  );
+  checks.push(
+    makeCheck(
+      "plugins.install.openclaw-wechat.version",
+      !installedVersion || versionCompare == null || versionCompare >= 0,
+      installedVersion
+        ? `installed=${installedVersion} expected>=${PLUGIN_VERSION}`
+        : "no install metadata (source-path load or legacy install)",
+      installedVersion ? { installedVersion, expectedVersion: PLUGIN_VERSION } : null,
     ),
   );
 
