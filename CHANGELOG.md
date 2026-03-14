@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [2.0.1] - 2026-03-14
+
+### Fixed
+- 修复 WeCom Agent 回复 `/workspace/...` 文件路径时因动态会话工作区缺少目标文件，最终只回显路径文本而不实际发送图片/文件的问题
+- 修复 WeCom Bot 长连接对附件回调 payload 形态兼容不足，导致 PDF/文件消息被当成普通文本继续处理的问题；补充 `msg_type`、嵌套 `message`、`attachments/items`、`file_url/download_url/file_name/aes_key` 等兼容解析
+- 修复 WeCom Bot 入站文件/图片处理未完整透传媒体级 AES Key 的问题，降低 PDF/图片解密失败和内容损坏风险
+- 修复本地 `whisper-cli` 转写时临时音频文件在子进程真正读取前被提前清理，导致语音识别报错 `input file not found`
+- 补充 WeCom Bot 长连接未解析 callback 的运行日志，便于继续定位企业微信新回调形态
+
 ## [2.0.0] - 2026-03-13
 
 ### Changed
