@@ -18,6 +18,25 @@ export function dedupeUrlList(urls) {
   return out;
 }
 
+function dedupeMediaEntries(entries) {
+  const seen = new Map();
+  for (const rawEntry of Array.isArray(entries) ? entries : []) {
+    if (!rawEntry || typeof rawEntry !== "object") continue;
+    const url = normalizeToken(rawEntry.url);
+    if (!url) continue;
+    const aesKey = normalizeToken(rawEntry.aesKey);
+    const existing = seen.get(url);
+    if (!existing) {
+      seen.set(url, { url, aesKey });
+      continue;
+    }
+    if (!existing.aesKey && aesKey) {
+      seen.set(url, { url, aesKey });
+    }
+  }
+  return Array.from(seen.values());
+}
+
 export function collectWecomBotImageUrls(imageLike) {
   return dedupeUrlList([
     imageLike?.url,
@@ -26,6 +45,16 @@ export function collectWecomBotImageUrls(imageLike) {
     imageLike?.image_url,
     imageLike?.imageUrl,
   ]);
+}
+
+export function collectWecomBotImageEntries(imageLike) {
+  const aesKey = normalizeToken(imageLike?.aeskey || imageLike?.aes_key || imageLike?.aesKey);
+  return dedupeMediaEntries(
+    collectWecomBotImageUrls(imageLike).map((url) => ({
+      url,
+      aesKey,
+    })),
+  );
 }
 
 export function normalizeWecomBotOutboundMediaUrls(payload = {}) {

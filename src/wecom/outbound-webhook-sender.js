@@ -32,6 +32,26 @@ export function createWecomWebhookOutboundSender({
   assertFunction("createHash", createHash);
   assertFunction("sleep", sleep);
 
+  const webhookSendChains = new Map();
+
+  function buildWebhookTargetKey({ target, sendUrl }) {
+    return [String(target?.url ?? "").trim(), String(target?.key ?? "").trim(), String(sendUrl ?? "").trim()]
+      .filter(Boolean)
+      .join("|");
+  }
+
+  async function enqueueWebhookSend(targetKey, task) {
+    const previous = webhookSendChains.get(targetKey) || Promise.resolve();
+    const run = previous.catch(() => {}).then(task);
+    const tracked = run.finally(() => {
+      if (webhookSendChains.get(targetKey) === tracked) {
+        webhookSendChains.delete(targetKey);
+      }
+    });
+    webhookSendChains.set(targetKey, tracked);
+    return run;
+  }
+
   function resolveWebhookSendContext({ webhook, webhookTargets, proxyUrl, logger }) {
     const target = resolveWecomWebhookTargetConfig(webhook, webhookTargets);
     if (!target) {
@@ -45,31 +65,34 @@ export function createWecomWebhookOutboundSender({
       throw new Error("invalid webhook target url/key");
     }
     const dispatcher = attachWecomProxyDispatcher(sendUrl, {}, { proxyUrl, logger })?.dispatcher;
-    return { target, dispatcher };
+    return { target, dispatcher, sendUrl };
   }
 
   async function sendWecomWebhookText({ webhook, webhookTargets, text, logger, proxyUrl }) {
-    const { target, dispatcher } = resolveWebhookSendContext({
+    const { target, dispatcher, sendUrl } = resolveWebhookSendContext({
       webhook,
       webhookTargets,
       proxyUrl,
       logger,
     });
-    const chunks = splitWecomText(String(text ?? ""));
-    for (let i = 0; i < chunks.length; i += 1) {
-      await webhookSendText({
-        url: target.url,
-        key: target.key,
-        content: chunks[i],
-        timeoutMs: 15000,
-        dispatcher,
-        fetchImpl,
-      });
-      if (i < chunks.length - 1) {
-        await sleep(200);
+    const targetKey = buildWebhookTargetKey({ target, sendUrl });
+    return enqueueWebhookSend(targetKey, async () => {
+      const chunks = splitWecomText(String(text ?? ""));
+      for (let i = 0; i < chunks.length; i += 1) {
+        await webhookSendText({
+          url: target.url,
+          key: target.key,
+          content: chunks[i],
+          timeoutMs: 15000,
+          dispatcher,
+          fetchImpl,
+        });
+        if (i < chunks.length - 1) {
+          await sleep(200);
+        }
       }
-    }
-    logger?.info?.(`wecom: webhook text sent chunks=${chunks.length}`);
+      logger?.info?.(`wecom: webhook text sent chunks=${chunks.length}`);
+    });
   }
 
   async function sendWecomWebhookMediaBatch({

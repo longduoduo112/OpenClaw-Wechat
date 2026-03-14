@@ -143,6 +143,44 @@ test("deliverBotReplyText prefers long_connection when reply context exists", as
   assert.equal(pushed[0].finish, true);
 });
 
+test("deliverBotReplyText falls back to active_stream when long_connection reply push misses", async () => {
+  const pushed = [];
+  const deliverer = createDeliverer({
+    resolveWecomDeliveryFallbackPolicy: () => ({
+      enabled: true,
+      order: ["long_connection", "active_stream", "response_url", "webhook_bot", "agent_push"],
+    }),
+    resolveWecomBotLongConnectionReplyContext: () => ({
+      accountId: "default",
+      sessionId: "wecom-bot:dingxiang",
+      streamId: "stream-ok",
+      msgId: "msg-002",
+    }),
+    pushWecomBotLongConnectionStreamUpdate: async (payload) => {
+      pushed.push(payload);
+      return { ok: false, reason: "connection-missing" };
+    },
+    hasBotStream: (streamId) => streamId === "stream-ok",
+  });
+
+  const result = await deliverer.deliverBotReplyText({
+    api: createApiMock(),
+    fromUser: "dingxiang",
+    accountId: "default",
+    sessionId: "wecom-bot:dingxiang",
+    streamId: "stream-ok",
+    text: "fallback via active stream",
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.layer, "active_stream");
+  assert.equal(result.finalStatus, "degraded");
+  assert.equal(pushed.length, 1);
+  assert.deepEqual(deliverer.finishedStreams, [
+    { streamId: "stream-ok", content: "fallback via active stream", options: { msgItem: [] } },
+  ]);
+});
+
 test("deliverBotReplyText falls back to agent_push with media links", async () => {
   const deliverer = createDeliverer({
     resolveWecomDeliveryFallbackPolicy: () => ({

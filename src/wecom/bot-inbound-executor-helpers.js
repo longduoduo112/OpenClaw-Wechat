@@ -4,6 +4,33 @@ function assertFunction(name, value) {
   }
 }
 
+function normalizeBotImageEntries({ imageEntries, imageUrls } = {}) {
+  const normalized = [];
+  const seen = new Map();
+  const sourceEntries = Array.isArray(imageEntries) && imageEntries.length > 0
+    ? imageEntries
+    : Array.isArray(imageUrls)
+      ? imageUrls.map((url) => ({ url }))
+      : [];
+  for (const rawEntry of sourceEntries) {
+    if (rawEntry == null) continue;
+    const entry = typeof rawEntry === "string" ? { url: rawEntry } : rawEntry;
+    const url = String(entry?.url ?? "").trim();
+    if (!url) continue;
+    const aesKey = String(entry?.aesKey ?? "").trim();
+    const existingIndex = seen.get(url);
+    if (existingIndex == null) {
+      seen.set(url, normalized.length);
+      normalized.push({ url, aesKey });
+      continue;
+    }
+    if (!normalized[existingIndex].aesKey && aesKey) {
+      normalized[existingIndex] = { url, aesKey };
+    }
+  }
+  return normalized;
+}
+
 const UNSUPPORTED_BOT_GROUP_TRIGGER_WARNED = new Set();
 
 function warnUnsupportedBotGroupTriggerOnce(triggerMode, logger) {
@@ -91,9 +118,11 @@ export function createWecomBotInboundFlowState({
   accountId = "default",
   fromUser,
   content,
+  imageEntries,
   imageUrls,
   fileUrl,
   fileName,
+  fileAesKey,
   voiceUrl,
   voiceMediaId,
   voiceContentType,
@@ -109,6 +138,7 @@ export function createWecomBotInboundFlowState({
   const normalizedAccountId = String(accountId ?? "default").trim().toLowerCase() || "default";
   const normalizedFromUser = String(fromUser ?? "").trim().toLowerCase();
   const baseSessionId = buildWecomBotSessionId(fromUser, normalizedAccountId);
+  const normalizedImageEntries = normalizeBotImageEntries({ imageEntries, imageUrls });
   const state = {
     runtime,
     cfg,
@@ -127,8 +157,11 @@ export function createWecomBotInboundFlowState({
     tempPathsToCleanup: [],
     botModeConfig: resolveWecomBotConfig(api, normalizedAccountId),
     botProxyUrl: resolveWecomBotProxyConfig(api, normalizedAccountId),
+    normalizedImageEntries,
+    normalizedImageUrls: normalizedImageEntries.map((entry) => entry.url),
     normalizedFileUrl: String(fileUrl ?? "").trim(),
     normalizedFileName: String(fileName ?? "").trim(),
+    normalizedFileAesKey: String(fileAesKey ?? "").trim(),
     normalizedVoiceUrl: String(voiceUrl ?? "").trim(),
     normalizedVoiceMediaId: String(voiceMediaId ?? "").trim(),
     normalizedVoiceContentType: String(voiceContentType ?? "").trim(),
@@ -139,13 +172,6 @@ export function createWecomBotInboundFlowState({
             content: String(quote.content ?? "").trim(),
           }
         : null,
-    normalizedImageUrls: Array.from(
-      new Set(
-        (Array.isArray(imageUrls) ? imageUrls : [])
-          .map((item) => String(item ?? "").trim())
-          .filter(Boolean),
-      ),
-    ),
     groupChatPolicy: normalizeWecomBotGroupChatPolicy(resolveWecomGroupChatPolicy(api), api?.logger),
     dynamicAgentPolicy: resolveWecomDynamicAgentPolicy(api),
     isAdminUser: false,

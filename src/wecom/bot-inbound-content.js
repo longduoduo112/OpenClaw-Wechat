@@ -40,9 +40,11 @@ export function createWecomBotInboundContentBuilder({
     botProxyUrl,
     msgType = "text",
     commandBody = "",
+    normalizedImageEntries = [],
     normalizedImageUrls = [],
     normalizedFileUrl = "",
     normalizedFileName = "",
+    normalizedFileAesKey = "",
     normalizedVoiceUrl = "",
     normalizedVoiceMediaId = "",
     normalizedVoiceContentType = "",
@@ -52,12 +54,17 @@ export function createWecomBotInboundContentBuilder({
     const tempPathsToCleanup = [];
     let messageText = String(commandBody ?? "").trim();
 
-    if (normalizedImageUrls.length > 0) {
+    if (normalizedImageUrls.length > 0 || normalizedImageEntries.length > 0) {
       const fetchedImagePaths = [];
-      const imageUrlsToFetch = normalizedImageUrls.slice(0, 3);
+      const imageEntriesToFetch =
+        Array.isArray(normalizedImageEntries) && normalizedImageEntries.length > 0
+          ? normalizedImageEntries.slice(0, 3)
+          : normalizedImageUrls.slice(0, 3).map((url) => ({ url, aesKey: "" }));
       const tempDir = join(tmpdir(), WECOM_TEMP_DIR_NAME);
       await mkdir(tempDir, { recursive: true });
-      for (const imageUrl of imageUrlsToFetch) {
+      for (const imageEntry of imageEntriesToFetch) {
+        const imageUrl = String(imageEntry?.url ?? "").trim();
+        const imageAesKey = String(imageEntry?.aesKey ?? "").trim();
         try {
           const { buffer, contentType } = await fetchMediaFromUrl(imageUrl, {
             proxyUrl: botProxyUrl,
@@ -73,10 +80,11 @@ export function createWecomBotInboundContentBuilder({
           let effectiveBuffer = buffer;
           let effectiveImageType =
             normalizedType.startsWith("image/") ? normalizedType : detectImageContentTypeFromBuffer(buffer);
-          if (!effectiveImageType && botModeConfig?.encodingAesKey) {
+          const decryptAesKey = imageAesKey || String(botModeConfig?.encodingAesKey ?? "").trim();
+          if (!effectiveImageType && decryptAesKey) {
             try {
               const decryptedBuffer = decryptWecomMediaBuffer({
-                aesKey: botModeConfig.encodingAesKey,
+                aesKey: decryptAesKey,
                 encryptedBuffer: buffer,
               });
               const decryptedImageType = detectImageContentTypeFromBuffer(decryptedBuffer);
@@ -158,7 +166,7 @@ export function createWecomBotInboundContentBuilder({
           });
           const decrypted = smartDecryptWecomFileBuffer({
             buffer: downloaded.buffer,
-            aesKey: botModeConfig?.encodingAesKey,
+            aesKey: normalizedFileAesKey || botModeConfig?.encodingAesKey,
             contentType: downloaded.contentType,
             sourceUrl: downloaded.finalUrl || normalizedFileUrl,
             decryptFn: decryptWecomMediaBuffer,

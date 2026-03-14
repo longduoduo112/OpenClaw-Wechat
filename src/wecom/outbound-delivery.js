@@ -260,9 +260,6 @@ export function createWecomBotReplyDeliverer({
           });
         },
         active_stream: async ({ text: content }) => {
-          if (longConnectionContext) {
-            return { ok: false, reason: "long-connection-context" };
-          }
           return deliverActiveStreamReply({
             streamId,
             sessionId: normalizedSessionId,

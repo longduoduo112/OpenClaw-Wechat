@@ -228,7 +228,7 @@ test("parseWecomBotInboundMessage parses mixed text and image url", () => {
     mixed: {
       msg_item: [
         { msgtype: "text", text: { content: "hello" } },
-        { msgtype: "image", image: { url: "https://example.com/a.png" } },
+        { msgtype: "image", image: { url: "https://example.com/a.png", aeskey: "img-key-1" } },
       ],
     },
   });
@@ -236,6 +236,7 @@ test("parseWecomBotInboundMessage parses mixed text and image url", () => {
   assert.equal(parsed.msgType, "mixed");
   assert.equal(parsed.content, "hello\n[图片]");
   assert.deepEqual(parsed.imageUrls, ["https://example.com/a.png"]);
+  assert.deepEqual(parsed.imageEntries, [{ url: "https://example.com/a.png", aesKey: "img-key-1" }]);
 });
 
 test("parseWecomBotInboundMessage parses mixed file and voice metadata", () => {
@@ -246,7 +247,7 @@ test("parseWecomBotInboundMessage parses mixed file and voice metadata", () => {
     mixed: {
       msg_item: [
         { msgtype: "text", text: { content: "请处理附件和语音" } },
-        { msgtype: "file", file: { url: "https://example.com/report.pdf", name: "report.pdf" } },
+        { msgtype: "file", file: { url: "https://example.com/report.pdf", name: "report.pdf", aeskey: "file-key-1" } },
         { msgtype: "voice", voice: { url: "https://example.com/voice.amr", media_id: "voice-1", content_type: "audio/amr" } },
       ],
     },
@@ -255,6 +256,7 @@ test("parseWecomBotInboundMessage parses mixed file and voice metadata", () => {
   assert.equal(parsed.msgType, "mixed");
   assert.equal(parsed.fileUrl, "https://example.com/report.pdf");
   assert.equal(parsed.fileName, "report.pdf");
+  assert.equal(parsed.fileAesKey, "file-key-1");
   assert.equal(parsed.voiceUrl, "https://example.com/voice.amr");
   assert.equal(parsed.voiceMediaId, "voice-1");
   assert.equal(parsed.voiceContentType, "audio/amr");
@@ -268,15 +270,62 @@ test("parseWecomBotInboundMessage parses file payload", () => {
     msgid: "f1",
     from: { userid: "dingxiang" },
     file: {
-      url: "https://example.com/demo.pdf",
+      download_url: "https://example.com/demo.pdf",
       name: "demo.pdf",
+      aeskey: "file-key-top-level",
     },
   });
   assert.equal(parsed.kind, "message");
   assert.equal(parsed.msgType, "file");
   assert.equal(parsed.fileUrl, "https://example.com/demo.pdf");
   assert.equal(parsed.fileName, "demo.pdf");
+  assert.equal(parsed.fileAesKey, "file-key-top-level");
   assert.match(parsed.content, /\[文件\]/);
+});
+
+test("parseWecomBotInboundMessage parses alternate nested file payload shape", () => {
+  const parsed = parseWecomBotInboundMessage({
+    message: {
+      msg_type: "file",
+      msg_id: "f2",
+      sender: { user_id: "dingxiang" },
+      responseUrl: "https://example.com/response",
+      file_url: "https://example.com/demo-2.pdf",
+      file_name: "demo-2.pdf",
+      aes_key: "file-key-alt",
+    },
+  });
+  assert.equal(parsed.kind, "message");
+  assert.equal(parsed.msgType, "file");
+  assert.equal(parsed.msgId, "f2");
+  assert.equal(parsed.fromUser, "dingxiang");
+  assert.equal(parsed.responseUrl, "https://example.com/response");
+  assert.equal(parsed.fileUrl, "https://example.com/demo-2.pdf");
+  assert.equal(parsed.fileName, "demo-2.pdf");
+  assert.equal(parsed.fileAesKey, "file-key-alt");
+});
+
+test("parseWecomBotInboundMessage parses attachment array as mixed payload", () => {
+  const parsed = parseWecomBotInboundMessage({
+    msg_type: "mixed",
+    msg_id: "m-alt-1",
+    sender: { user_id: "dingxiang" },
+    attachments: [
+      { type: "text", content: "请读取附件" },
+      {
+        type: "file",
+        file_url: "https://example.com/brief.pdf",
+        file_name: "brief.pdf",
+        aes_key: "file-key-brief",
+      },
+    ],
+  });
+  assert.equal(parsed.kind, "message");
+  assert.equal(parsed.msgType, "mixed");
+  assert.equal(parsed.content, "请读取附件\n[文件] brief.pdf");
+  assert.equal(parsed.fileUrl, "https://example.com/brief.pdf");
+  assert.equal(parsed.fileName, "brief.pdf");
+  assert.equal(parsed.fileAesKey, "file-key-brief");
 });
 
 test("parseWecomBotInboundMessage parses voice payload url/media metadata", () => {

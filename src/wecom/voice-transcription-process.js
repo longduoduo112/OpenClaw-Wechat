@@ -1,4 +1,7 @@
 import { spawn } from "node:child_process";
+import { constants as fsConstants } from "node:fs";
+import { access } from "node:fs/promises";
+import { delimiter } from "node:path";
 
 function assertFunction(name, value) {
   if (typeof value !== "function") {
@@ -9,12 +12,58 @@ function assertFunction(name, value) {
 export function createVoiceTranscriptionProcessRuntime({
   runProcessWithTimeoutImpl,
   checkCommandAvailableImpl,
+  processEnv = process.env,
+  accessImpl = access,
 } = {}) {
   const ffmpegPathCheckCache = {
     checked: false,
     available: false,
   };
   const commandPathCheckCache = new Map();
+
+  function readString(value) {
+    return String(value ?? "").trim();
+  }
+
+  function uniqueStrings(values) {
+    return Array.from(
+      new Set(
+        values
+          .map((value) => readString(value))
+          .filter(Boolean),
+      ),
+    );
+  }
+
+  function listCandidateCommandPaths(command) {
+    const normalizedCommand = readString(command);
+    if (!normalizedCommand) return [];
+    if (normalizedCommand.includes("/")) {
+      return [normalizedCommand];
+    }
+    const homeDir = readString(processEnv?.HOME);
+    const pathDirs = readString(processEnv?.PATH)
+      .split(delimiter)
+      .map((entry) => readString(entry))
+      .filter(Boolean);
+    const pythonUserBins = homeDir
+      ? ["3.8", "3.9", "3.10", "3.11", "3.12", "3.13"].map(
+          (version) => `${homeDir}/Library/Python/${version}/bin`,
+        )
+      : [];
+    const searchDirs = uniqueStrings([
+      ...pathDirs,
+      homeDir ? `${homeDir}/.local/bin` : "",
+      homeDir ? `${homeDir}/bin` : "",
+      ...pythonUserBins,
+      "/usr/local/bin",
+      "/opt/homebrew/bin",
+    ]);
+    return uniqueStrings([
+      normalizedCommand,
+      ...searchDirs.map((dir) => `${dir}/${normalizedCommand}`),
+    ]);
+  }
 
   function runProcessWithTimeout({ command, args, timeoutMs = 15000, allowNonZeroExitCode = false }) {
     if (typeof runProcessWithTimeoutImpl === "function") {
@@ -72,6 +121,16 @@ export function createVoiceTranscriptionProcessRuntime({
     if (commandPathCheckCache.has(normalized)) {
       return commandPathCheckCache.get(normalized);
     }
+    if (normalized.includes("/")) {
+      try {
+        await accessImpl(normalized, fsConstants.X_OK);
+        commandPathCheckCache.set(normalized, true);
+        return true;
+      } catch {
+        commandPathCheckCache.set(normalized, false);
+        return false;
+      }
+    }
     try {
       await runProcessWithTimeout({
         command: normalized,
@@ -101,15 +160,18 @@ export function createVoiceTranscriptionProcessRuntime({
   function listLocalWhisperCommandCandidates({ voiceConfig } = {}) {
     const provider = String(voiceConfig?.provider ?? "").trim().toLowerCase();
     const explicitCommand = String(voiceConfig?.command ?? "").trim();
-    const fallbackCandidates =
+    const fallbackCommandNames =
       provider === "local-whisper"
         ? ["whisper"]
         : provider === "local-whisper-cli"
           ? ["whisper-cli"]
           : [];
-    const candidates = explicitCommand ? [explicitCommand, ...fallbackCandidates] : fallbackCandidates;
+    const commandNames = explicitCommand
+      ? uniqueStrings([explicitCommand, ...fallbackCommandNames])
+      : uniqueStrings(fallbackCommandNames);
+    const candidates = uniqueStrings(commandNames.flatMap((command) => listCandidateCommandPaths(command)));
 
-    if (candidates.length === 0) {
+    if (commandNames.length === 0) {
       return {
         provider,
         explicitCommand,

@@ -56,3 +56,42 @@ test("sendWecomWebhookMediaBatch sends image and tracks failed file sends", asyn
   assert.equal(sentImages[0].md5, "68656c6c");
   assert.deepEqual(sentFiles, ["a.txt"]);
 });
+
+test("sendWecomWebhookText serializes concurrent sends to the same webhook target", async () => {
+  const sentTexts = [];
+  let releaseFirstSend;
+  const firstSendBlocked = new Promise((resolve) => {
+    releaseFirstSend = resolve;
+  });
+  const sender = createWecomWebhookOutboundSender(
+    createDeps({
+      webhookSendText: async ({ content }) => {
+        sentTexts.push(String(content));
+        if (sentTexts.length === 1) {
+          await firstSendBlocked;
+        }
+      },
+    }),
+  );
+
+  const firstSend = sender.sendWecomWebhookText({
+    webhook: "main",
+    webhookTargets: {},
+    text: "first",
+    logger: { info() {}, warn() {}, error() {} },
+  });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  const secondSend = sender.sendWecomWebhookText({
+    webhook: "main",
+    webhookTargets: {},
+    text: "second",
+    logger: { info() {}, warn() {}, error() {} },
+  });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  assert.deepEqual(sentTexts, ["first"]);
+  releaseFirstSend();
+  await Promise.all([firstSend, secondSend]);
+  assert.deepEqual(sentTexts, ["first", "second"]);
+});

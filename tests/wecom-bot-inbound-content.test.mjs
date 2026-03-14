@@ -84,6 +84,59 @@ test("buildBotInboundContent returns file fallback text when file download fails
   assert.match(result.messageText, /下载失败/);
 });
 
+test("buildBotInboundContent decrypts image with per-message aes key", async () => {
+  const imageDecryptCalls = [];
+  const build = createBuilder({
+    fetchMediaFromUrl: async () => ({
+      buffer: Buffer.from("encrypted-image"),
+      contentType: "application/octet-stream",
+    }),
+    detectImageContentTypeFromBuffer: (buffer) =>
+      String(buffer) === "decrypted-image" ? "image/png" : "",
+    decryptWecomMediaBuffer: ({ aesKey }) => {
+      imageDecryptCalls.push(aesKey);
+      return Buffer.from("decrypted-image");
+    },
+  });
+  const result = await build({
+    api: { logger: { info() {}, warn() {} } },
+    msgType: "image",
+    normalizedImageEntries: [{ url: "https://example.com/a.png", aesKey: "image-key-1" }],
+    normalizedImageUrls: ["https://example.com/a.png"],
+  });
+  assert.equal(result.aborted, false);
+  assert.equal(imageDecryptCalls[0], "image-key-1");
+  assert.match(result.messageText, /图片1: \/tmp\/openclaw-wecom\//);
+});
+
+test("buildBotInboundContent prefers per-message aes key for file decrypt", async () => {
+  const fileDecryptCalls = [];
+  const build = createBuilder({
+    fetchMediaFromUrl: async () => ({
+      buffer: Buffer.from("encrypted-pdf"),
+      contentType: "application/octet-stream",
+      contentDisposition: "attachment; filename=report.pdf",
+      finalUrl: "https://example.com/report.pdf",
+      source: "remote",
+    }),
+    smartDecryptWecomFileBuffer: ({ aesKey, buffer }) => {
+      fileDecryptCalls.push(aesKey);
+      return { buffer, decrypted: true };
+    },
+  });
+  const result = await build({
+    api: { logger: { info() {}, warn() {} } },
+    botModeConfig: { encodingAesKey: "fallback-key" },
+    msgType: "file",
+    normalizedFileUrl: "https://example.com/report.pdf",
+    normalizedFileName: "report.pdf",
+    normalizedFileAesKey: "message-key-1",
+  });
+  assert.equal(result.aborted, false);
+  assert.equal(fileDecryptCalls[0], "message-key-1");
+  assert.match(result.messageText, /用户发送了一个文件/);
+});
+
 test("buildBotInboundContent transcribes voice from downloadable voice url", async () => {
   const calls = [];
   const build = createBuilder({

@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import { access, readFile, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
 
 import { createWecomVoiceTranscriber } from "../src/wecom/voice-transcription.js";
@@ -61,9 +64,32 @@ test("resolveLocalWhisperCommand falls back when explicit command unavailable", 
   assert.equal(command, "whisper");
 });
 
+test("resolveLocalWhisperCommand discovers macOS user-bin whisper fallback", async () => {
+  const transcriber = createTranscriber({
+    processEnv: {
+      HOME: "/Users/tester",
+      PATH: "/usr/bin:/bin",
+    },
+    checkCommandAvailableImpl: async (cmd) => cmd === "/Users/tester/Library/Python/3.11/bin/whisper",
+  });
+
+  const command = await transcriber.__internal.resolveLocalWhisperCommand({
+    voiceConfig: {
+      provider: "local-whisper",
+      command: "whisper",
+    },
+    logger: { warn() {} },
+  });
+  assert.equal(command, "/Users/tester/Library/Python/3.11/bin/whisper");
+});
+
 test("inspectWecomVoiceTranscriptionRuntime reports missing command and ffmpeg", async () => {
   const transcriber = createTranscriber({
     checkCommandAvailableImpl: async () => false,
+    processEnv: {
+      HOME: "/Users/tester",
+      PATH: "/usr/bin:/bin",
+    },
   });
 
   const info = await transcriber.inspectWecomVoiceTranscriptionRuntime({
@@ -81,10 +107,9 @@ test("inspectWecomVoiceTranscriptionRuntime reports missing command and ffmpeg",
   assert.equal(info.enabled, true);
   assert.equal(info.resolvedCommand, "");
   assert.equal(info.ffmpegAvailable, false);
-  assert.deepEqual(
-    info.commandCandidates,
-    ["custom-whisper", "whisper-cli"],
-  );
+  assert.ok(info.commandCandidates.includes("custom-whisper"));
+  assert.ok(info.commandCandidates.includes("whisper-cli"));
+  assert.ok(info.commandCandidates.includes("/Users/tester/Library/Python/3.11/bin/whisper-cli"));
   assert.match(info.issues.join(" | "), /no available command in PATH/);
   assert.match(info.issues.join(" | "), /modelPath is required/);
   assert.match(info.issues.join(" | "), /ffmpeg not available/);
@@ -150,4 +175,41 @@ test("transcribeInboundVoice rejects unsupported type when ffmpeg disabled", asy
     }),
     /ffmpegEnabled=false/,
   );
+});
+
+test("transcribeInboundVoice keeps temp audio until local whisper cli finishes", async () => {
+  const transcriber = createTranscriber({
+    runProcessWithTimeoutImpl: async ({ args }) => {
+      const audioPath = args[args.indexOf("-f") + 1];
+      const outputBase = args[args.indexOf("-of") + 1];
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      await access(audioPath);
+      const audioBuffer = await readFile(audioPath);
+      assert.equal(audioBuffer.length > 0, true);
+      await access(join(tmpdir(), "openclaw-wechat-test"));
+      await writeFile(`${outputBase}.txt`, "测试转写", "utf8");
+      return { stdout: "", stderr: "" };
+    },
+  });
+
+  const result = await transcriber.transcribeInboundVoice({
+    api: { logger: { warn() {}, info() {}, error() {} } },
+    buffer: Buffer.from("voice-bytes"),
+    contentType: "audio/wav",
+    mediaId: "m-temp-1",
+    voiceConfig: {
+      enabled: true,
+      maxBytes: 1024,
+      transcodeToWav: false,
+      ffmpegEnabled: true,
+      provider: "local-whisper-cli",
+      command: "whisper-cli",
+      timeoutMs: 1000,
+      modelPath: "./model.bin",
+      requireModelPath: true,
+      language: "zh",
+    },
+  });
+
+  assert.equal(result, "测试转写");
 });

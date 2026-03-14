@@ -513,8 +513,10 @@ export function createWecomBotLongConnectionManager({
               chatId: parsed.chatId,
               isGroupChat: parsed.isGroupChat,
               imageUrls: parsed.imageUrls,
+              imageEntries: parsed.imageEntries,
               fileUrl: parsed.fileUrl,
               fileName: parsed.fileName,
+              fileAesKey: parsed.fileAesKey,
               quote: parsed.quote,
               responseUrl: parsed.responseUrl,
               accountId: parsed.accountId,
@@ -691,6 +693,16 @@ export function createWecomBotLongConnectionManager({
           ? { ...payload.body, msgtype: "event" }
           : payload?.body;
       const parsed = parseWecomBotInboundMessage(normalizedBody);
+      if (!parsed) {
+        const bodyKeys =
+          normalizedBody && typeof normalizedBody === "object"
+            ? Object.keys(normalizedBody).slice(0, 12).join(",")
+            : "non-object";
+        api?.logger?.warn?.(
+          `wecom(bot-longconn): ignored unparsed callback account=${client.accountId} cmd=${command} bodyKeys=${bodyKeys || "n/a"}`,
+        );
+        return;
+      }
       if (parsed && typeof parsed === "object") {
         parsed.reqId = reqId || buildRequestId(CMD_CALLBACK);
       }

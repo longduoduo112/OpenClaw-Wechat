@@ -51,6 +51,69 @@ test("createWecomApiSenders sendWecomText sends split chunks in order", async ()
   assert.equal(sentBodies[1]?.text?.content, "part-2");
 });
 
+test("createWecomApiSenders serializes concurrent sends to the same target", async () => {
+  const sentBodies = [];
+  let releaseFirstSend;
+  const firstSendBlocked = new Promise((resolve) => {
+    releaseFirstSend = resolve;
+  });
+  const senders = createWecomApiSenders({
+    sleep: async () => {},
+    splitWecomText: (text) => [String(text ?? "")],
+    getByteLength: (text) => Buffer.byteLength(String(text ?? ""), "utf8"),
+    apiLimiter: createPassThroughLimiter(),
+    fetchWithRetry: async (_url, options = {}) => {
+      const body = JSON.parse(String(options.body ?? "{}"));
+      sentBodies.push(body);
+      if (sentBodies.length === 1) {
+        await firstSendBlocked;
+      }
+      return {
+        async json() {
+          return { errcode: 0, msgid: `m-${sentBodies.length}` };
+        },
+      };
+    },
+    getWecomAccessToken: async () => "token-1",
+    buildWecomMessageSendRequest: ({ msgType, payload }) => ({
+      sendUrl: "https://qyapi.weixin.qq.com/cgi-bin/message/send?access_token=token-1",
+      body: {
+        msgtype: msgType,
+        ...payload,
+      },
+      isAppChat: false,
+    }),
+  });
+
+  const firstSend = senders.sendWecomText({
+    corpId: "ww-1",
+    corpSecret: "secret",
+    agentId: "1000002",
+    toUser: "alice",
+    text: "first",
+    logger: { info() {}, warn() {}, error() {} },
+  });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  const secondSend = senders.sendWecomText({
+    corpId: "ww-1",
+    corpSecret: "secret",
+    agentId: "1000002",
+    toUser: "alice",
+    text: "second",
+    logger: { info() {}, warn() {}, error() {} },
+  });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  assert.equal(sentBodies.length, 1);
+  releaseFirstSend();
+  await Promise.all([firstSend, secondSend]);
+
+  assert.equal(sentBodies.length, 2);
+  assert.equal(sentBodies[0]?.text?.content, "first");
+  assert.equal(sentBodies[1]?.text?.content, "second");
+});
+
 test("createWecomApiSenders sendWecomVoice throws typed error on errcode", async () => {
   const senders = createWecomApiSenders({
     sleep: async () => {},

@@ -21,6 +21,16 @@ test("normalizeWecomResolvedTarget falls back to resolver", () => {
   assert.equal(normalizeWecomResolvedTarget(""), null);
 });
 
+test("normalizeWecomResolvedTarget accepts alias fields and nested raw targets", () => {
+  const { normalizeWecomResolvedTarget } = createWecomTargetResolver({
+    resolveWecomTarget: (raw) => (raw === "wecom:carol" ? { toUser: "carol" } : null),
+  });
+
+  assert.deepEqual(normalizeWecomResolvedTarget({ userId: "alice" }), { toUser: "alice" });
+  assert.deepEqual(normalizeWecomResolvedTarget({ chatid: "wr-1" }), { chatId: "wr-1" });
+  assert.deepEqual(normalizeWecomResolvedTarget({ target: "wecom:carol" }), { toUser: "carol" });
+});
+
 test("formatWecomTargetForLog formats webhook/chat/direct", () => {
   const { formatWecomTargetForLog } = createWecomTargetResolver({
     resolveWecomTarget: () => null,

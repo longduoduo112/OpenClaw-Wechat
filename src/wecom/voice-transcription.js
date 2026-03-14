@@ -29,6 +29,7 @@ export function createWecomVoiceTranscriber({
   const processRuntime = createVoiceTranscriptionProcessRuntime({
     runProcessWithTimeoutImpl,
     checkCommandAvailableImpl,
+    processEnv,
   });
   const {
     runProcessWithTimeout,
@@ -206,7 +207,7 @@ export function createWecomVoiceTranscriber({
         if (voiceConfig.requireModelPath !== false && !voiceConfig.modelPath) {
           throw new Error("voiceTranscription.modelPath is required for local-whisper-cli (or set requireModelPath=false)");
         }
-        return transcribeWithWhisperCli({
+        return await transcribeWithWhisperCli({
           command,
           modelPath: voiceConfig.modelPath,
           audioPath,
@@ -217,7 +218,7 @@ export function createWecomVoiceTranscriber({
       }
 
       if (provider === "local-whisper") {
-        return transcribeWithWhisperPython({
+        return await transcribeWithWhisperPython({
           command,
           model: voiceConfig.model,
           audioPath,
