@@ -244,6 +244,32 @@ function summarizeAccountReports(accountReports = []) {
   };
 }
 
+function buildBotOverview({ config = {}, botConfig = {} } = {}) {
+  const bindingsCount = Array.isArray(config?.bindings) ? config.bindings.length : 0;
+  const dynamicAgentEnabled =
+    config?.channels?.wecom?.dynamicAgent?.enabled === true || config?.channels?.wecom?.dynamicAgents?.enabled === true;
+  const longConnectionEnabled =
+    botConfig?.enabled === true &&
+    botConfig?.longConnection?.enabled === true &&
+    Boolean(String(botConfig?.longConnection?.botId ?? botConfig?.longConnection?.botid ?? "").trim()) &&
+    Boolean(String(botConfig?.longConnection?.secret ?? "").trim());
+  const webhookEnabled =
+    botConfig?.enabled === true &&
+    Boolean(String(botConfig?.token ?? "").trim()) &&
+    Boolean(String(botConfig?.encodingAesKey ?? "").trim()) &&
+    Boolean(String(botConfig?.webhookPath ?? "").trim());
+  const canReceive = longConnectionEnabled || webhookEnabled;
+  return {
+    canReceive,
+    canReply: canReceive,
+    canSend: canReceive,
+    longConnectionEnabled,
+    webhookEnabled,
+    bindingsCount,
+    dynamicAgentEnabled,
+  };
+}
+
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -365,6 +391,10 @@ function resolveBotConfig(config) {
     buildDefaultBotWebhookPath(accountId),
   );
   const gatewayPort = asNumber(config?.gateway?.port, 8885);
+  const longConnection =
+    bot?.longConnection && typeof bot.longConnection === "object"
+      ? bot.longConnection
+      : {};
   return {
     accountId,
     enabled,
@@ -372,6 +402,7 @@ function resolveBotConfig(config) {
     encodingAesKey,
     webhookPath,
     gatewayPort: Math.max(1, gatewayPort || 8885),
+    longConnection,
   };
 }
 
@@ -496,10 +527,17 @@ function reportAndExit(report, asJson = false) {
   console.log(`- config: ${report.configPath}`);
   console.log(`- mode: ${report.args?.allAccounts ? "all-accounts" : `single-account (${report.args?.account || "default"})`}`);
   for (const accountReport of accountReports) {
+    const overview = buildBotOverview({ config: report.config, botConfig: accountReport.config });
     console.log(`\nAccount: ${accountReport.account}`);
     console.log(`- endpoint: ${accountReport.endpoint}`);
     console.log(`- fromUser: ${accountReport.fromUser}`);
     console.log(`- content: ${accountReport.content}`);
+    console.log(
+      `- readiness: receive=${overview.canReceive ? "yes" : "no"} reply=${overview.canReply ? "yes" : "no"} send=${overview.canSend ? "yes" : "no"} longConnection=${overview.longConnectionEnabled ? "on" : "off"} webhook=${overview.webhookEnabled ? "on" : "off"}`,
+    );
+    console.log(
+      `- routing: bindings=${overview.bindingsCount} dynamicAgent=${overview.dynamicAgentEnabled ? "on" : "off"}`,
+    );
     for (const check of accountReport.checks) {
       console.log(`${check.ok ? "OK " : "FAIL"} ${check.name} :: ${check.detail}`);
     }
@@ -575,6 +613,7 @@ async function runBotE2E({ config, args, configPath, accountId }) {
       endpoint,
       fromUser,
       content,
+      config: botConfig,
       checks,
       summary: summarize(checks),
     };
@@ -759,6 +798,7 @@ async function runBotE2E({ config, args, configPath, accountId }) {
     endpoint,
     fromUser,
     content,
+    config: botConfig,
     checks,
     summary: summarize(checks),
   };
@@ -781,6 +821,7 @@ async function main() {
       endpoint: "",
       fromUser: args.fromUser || "",
       content: args.content || "",
+      config: null,
       checks: [
         makeCheck("config.load", false, `failed to load ${configPath}: ${String(err?.message || err)}`),
       ],
@@ -810,6 +851,7 @@ async function main() {
   const report = {
     args,
     configPath,
+    config,
     accounts: accountReports,
     summary: summarizeAccountReports(accountReports),
   };

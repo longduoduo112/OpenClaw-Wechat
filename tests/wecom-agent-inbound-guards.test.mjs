@@ -160,3 +160,38 @@ test("applyWecomAgentInboundGuards blocks direct message when dm policy is deny"
   assert.equal(result.ok, false);
   assert.deepEqual(sent, ["dm deny"]);
 });
+
+test("applyWecomAgentInboundGuards creates pairing challenge for unknown DM sender", async () => {
+  const sent = [];
+  const { input } = createCommon({
+    fromUser: "DingXiang",
+    normalizedFromUser: "dingxiang",
+    resolveWecomDmPolicy: () => ({
+      mode: "pairing",
+      allowFrom: [],
+      rejectMessage: "need pairing",
+    }),
+    resolveWecomAllowFromPolicy: () => ({
+      allowFrom: ["*"],
+      rejectMessage: "blocked",
+    }),
+    sendTextToUser: async (text) => {
+      sent.push(String(text));
+    },
+    api: {
+      logger: { info() {}, warn() {} },
+      runtime: {
+        channel: {
+          pairing: {
+            readAllowFromStore: async () => [],
+            upsertPairingRequest: async () => ({ code: "ABCD12", created: true }),
+            buildPairingReply: ({ code }) => `pairing:${code}`,
+          },
+        },
+      },
+    },
+  });
+  const result = await applyWecomAgentInboundGuards(input);
+  assert.equal(result.ok, false);
+  assert.deepEqual(sent, ["pairing:ABCD12"]);
+});

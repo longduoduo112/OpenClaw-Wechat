@@ -17,7 +17,27 @@ function buildDmPolicyStatusLine(dmPolicy = {}) {
     const count = Array.isArray(dmPolicy?.allowFrom) ? dmPolicy.allowFrom.length : 0;
     return `✅ 私聊策略：白名单（${count} 个用户）`;
   }
+  if (mode === "pairing") {
+    const count = Array.isArray(dmPolicy?.allowFrom) ? dmPolicy.allowFrom.length : 0;
+    return count > 0
+      ? `✅ 私聊策略：配对审批（pairing，显式放行 ${count} 个用户）`
+      : "✅ 私聊策略：配对审批（pairing，首次私聊需审批）";
+  }
   return "ℹ️ 私聊策略：开放（open）";
+}
+
+function buildRoutePolicyStatusLine({ bindingsCount = 0, dynamicAgentPolicy = {} } = {}) {
+  const count = Math.max(0, Number(bindingsCount) || 0);
+  if (count > 0 && dynamicAgentPolicy?.enabled) {
+    return `✅ 路由策略：OpenClaw bindings 优先（${count} 条），动态 Agent 补充（mode=${dynamicAgentPolicy.mode}）`;
+  }
+  if (count > 0) {
+    return `✅ 路由策略：OpenClaw bindings（${count} 条）`;
+  }
+  if (dynamicAgentPolicy?.enabled) {
+    return `✅ 路由策略：动态 Agent（mode=${dynamicAgentPolicy.mode}）`;
+  }
+  return "ℹ️ 路由策略：使用 OpenClaw 默认 Agent 路由";
 }
 
 function buildEventPolicyStatusLine(eventPolicy = {}) {
@@ -80,6 +100,43 @@ function buildVoiceStatusLine(voiceConfig = {}, voiceRuntimeInfo = null) {
   return `${baseLine}（${commandState}，${ffmpegState}）${issueSuffix}`;
 }
 
+function buildAgentReadinessLines({ config = {}, voiceConfig = {} } = {}) {
+  const canReceive = Boolean(config?.callbackToken && config?.callbackAesKey && config?.webhookPath);
+  const canReply = Boolean(config?.corpId && config?.corpSecret && config?.agentId);
+  const docEnabled = config?.tools?.doc !== false;
+  const voiceEnabled = voiceConfig?.enabled === true;
+  return [
+    `${canReceive ? "✅" : "⚠️"} 收消息：${canReceive ? "Agent 回调已配置" : "缺少 callbackToken / callbackAesKey / webhookPath"}`,
+    `${canReply ? "✅" : "⚠️"} 回消息：${canReply ? "Agent API 可用" : "缺少 corpId / corpSecret / agentId"}`,
+    `${canReply ? "✅" : "⚠️"} 主动发送：${canReply ? "文本/图片/文件可主动发送" : "主动发送依赖 Agent API 配置"}`,
+    `${canReply ? "✅" : "⚠️"} 媒体链路：${canReply ? "图片/文件/语音回退链路可用" : "需先完成 Agent API 配置"}`,
+    `${voiceEnabled ? "✅" : "ℹ️"} 语音能力：${voiceEnabled ? "已启用本地转写回退" : "仅使用企业微信 Recognition"}`,
+    `${docEnabled ? "✅" : "ℹ️"} 文档工具：${docEnabled ? "wecom_doc 已启用" : "未启用"}`,
+  ];
+}
+
+function buildBotReadinessLines({ botConfig = {}, config = {} } = {}) {
+  const longConnectionEnabled =
+    botConfig?.longConnection?.enabled === true &&
+    Boolean(String(botConfig?.longConnection?.botId ?? "").trim()) &&
+    Boolean(String(botConfig?.longConnection?.secret ?? "").trim());
+  const webhookEnabled =
+    botConfig?.enabled === true &&
+    Boolean(String(botConfig?.token ?? "").trim()) &&
+    Boolean(String(botConfig?.encodingAesKey ?? "").trim()) &&
+    Boolean(String(botConfig?.webhookPath ?? "").trim());
+  const canReceive = longConnectionEnabled || webhookEnabled;
+  const canReply = canReceive;
+  const docEnabled = config?.tools?.doc !== false;
+  return [
+    `${canReceive ? "✅" : "⚠️"} 收消息：${canReceive ? (longConnectionEnabled ? "Bot 长连接/回调已配置" : "Bot webhook 已配置") : "缺少 Bot webhook 或长连接凭证"}`,
+    `${canReply ? "✅" : "⚠️"} 回消息：${canReply ? "原生 stream + fallback 可用" : "需先完成 Bot 配置"}`,
+    `${canReceive ? "ℹ️" : "⚠️"} 主动发送：${canReceive ? "Bot 以会话回包为主；跨会话主动发送建议配合 Agent/Webhook 目标" : "需先完成 Bot 配置"}`,
+    `${canReceive ? "✅" : "⚠️"} 媒体链路：${canReceive ? "Bot 图片/文件/PDF 入站理解已启用" : "需先完成 Bot 配置"}`,
+    `${docEnabled ? "✅" : "ℹ️"} 文档工具：${docEnabled ? "wecom_doc 已启用" : "未启用"}`,
+  ];
+}
+
 export function buildAgentStatusText({
   fromUser,
   config,
@@ -100,9 +157,11 @@ export function buildAgentStatusText({
   webhookBotPolicy,
   dynamicAgentPolicy,
   observabilityMetrics,
+  bindingsCount = 0,
 } = {}) {
   const proxyEnabled = Boolean(config?.outboundProxy);
   const voiceStatusLine = buildVoiceStatusLine(voiceConfig, voiceRuntimeInfo);
+  const readinessLines = buildAgentReadinessLines({ config, voiceConfig });
   const commandPolicyLine = commandPolicy.enabled
     ? `✅ 指令白名单已启用（${commandPolicy.allowlist.length} 条，管理员 ${commandPolicy.adminUsers.length} 人）`
     : "ℹ️ 指令白名单未启用";
@@ -141,6 +200,7 @@ export function buildAgentStatusText({
   const dynamicAgentPolicyLine = dynamicAgentPolicy.enabled
     ? `✅ 动态 Agent 路由已启用（mode=${dynamicAgentPolicy.mode}，用户映射 ${Object.keys(dynamicAgentPolicy.userMap || {}).length}，群映射 ${Object.keys(dynamicAgentPolicy.groupMap || {}).length}）`
     : "ℹ️ 动态 Agent 路由未启用";
+  const routePolicyLine = buildRoutePolicyStatusLine({ bindingsCount, dynamicAgentPolicy });
   const entryVisibilityLine = "✅ 微信插件入口联系人：Agent 模式可见（自建应用）";
   const observabilityLines = buildObservabilityStatusLines(observabilityMetrics);
 
@@ -153,8 +213,8 @@ export function buildAgentStatusText({
 插件版本：${pluginVersion}
 
 功能状态：
+${readinessLines.join("\n")}
 ✅ 文本消息
-✅ 图片发送/接收
 ✅ 消息分段 (2048字符)
 ✅ 命令系统
 ✅ Markdown 转换
@@ -172,6 +232,7 @@ ${streamManagerPolicyLine}
 ${webhookBotPolicyLine}
 ${webhookTargetsLine}
 ${dynamicAgentPolicyLine}
+${routePolicyLine}
 ${entryVisibilityLine}
 ${proxyEnabled ? "✅ WeCom 出站代理已启用" : "ℹ️ WeCom 出站代理未启用"}
 ${voiceStatusLine}
@@ -194,7 +255,10 @@ export function buildBotStatusText({
   webhookBotPolicy,
   dynamicAgentPolicy,
   observabilityMetrics,
+  config = {},
+  bindingsCount = 0,
 } = {}) {
+  const readinessLines = buildBotReadinessLines({ botConfig, config });
   const commandPolicyLine = commandPolicy.enabled
     ? `✅ 指令白名单已启用（${commandPolicy.allowlist.length} 条，管理员 ${commandPolicy.adminUsers.length} 人）`
     : "ℹ️ 指令白名单未启用";
@@ -227,6 +291,7 @@ export function buildBotStatusText({
   const dynamicAgentPolicyLine = dynamicAgentPolicy.enabled
     ? `✅ 动态 Agent 路由已启用（mode=${dynamicAgentPolicy.mode}，用户映射 ${Object.keys(dynamicAgentPolicy.userMap || {}).length}，群映射 ${Object.keys(dynamicAgentPolicy.groupMap || {}).length}）`
     : "ℹ️ 动态 Agent 路由未启用";
+  const routePolicyLine = buildRoutePolicyStatusLine({ bindingsCount, dynamicAgentPolicy });
   const entryVisibilityLine = "ℹ️ 微信插件入口联系人：Bot 模式通常不显示（请通过机器人会话/群聊入口触发）";
   const observabilityLines = buildObservabilityStatusLines(observabilityMetrics);
   return `📊 系统状态
@@ -237,6 +302,7 @@ export function buildBotStatusText({
 Bot Webhook：${botConfig.webhookPath}
 
 功能状态：
+${readinessLines.join("\n")}
 ✅ 原生流式回复（stream）
 ${commandPolicyLine}
 ${allowFromPolicyLine}
@@ -246,8 +312,10 @@ ${groupPolicyLine}
 ${fallbackPolicyLine}
 ${streamManagerPolicyLine}
 ${webhookBotPolicyLine}
+${longConnectionLine}
 ${webhookTargetsLine}
 ${dynamicAgentPolicyLine}
+${routePolicyLine}
 ${entryVisibilityLine}
 ${observabilityLines.status}
 ${observabilityLines.recent}`;

@@ -4,6 +4,19 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [2.1.0] - 2026-03-14
+
+### Added
+- 新增 `dm.mode=pairing`，首次私聊可接入 OpenClaw 原生配对审批流，不再只能依赖静态 `allowFrom`
+- 新增 WeCom 渠道 pairing metadata，支持 `quickstartAllowFrom`、`wecomUserId` 归一化以及审批通过后的默认通知回执
+- `wecom:selfcheck`、`wecom:agent:selfcheck`、`wecom:bot:selfcheck` 新增接入摘要，直接输出 `readiness` 与 `routing`
+
+### Changed
+- WeCom 渠道 metadata 补齐 `detailLabel`、`systemImage` 与 quickstart 提示，接入路径更贴近 OpenClaw 原生渠道
+- `/status` 输出优先展示“收消息 / 回消息 / 主动发送 / 媒体 / 语音 / 文档”准备情况，并显式展示 `bindings` / `dynamicAgent` 路由来源
+- WeCom Bot 长连接正常连接日志默认降到 `debug`，减少 `connect/opened/subscribed` 噪音
+- README（中英文）改成 `2.1.0` 接入口径，补充 `pairing`、selfcheck 摘要和推荐接入顺序
+
 ## [2.0.1] - 2026-03-14
 
 ### Fixed

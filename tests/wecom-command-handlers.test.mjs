@@ -9,7 +9,17 @@ function createHandlers(overrides = {}) {
     sendWecomText: async (payload) => {
       sent.push(payload);
     },
-    getWecomConfig: () => ({ accountId: "default", outboundProxy: "", webhookPath: "/wecom/bot/callback" }),
+    getWecomConfig: () => ({
+      accountId: "default",
+      corpId: "ww1",
+      corpSecret: "s",
+      agentId: "1000002",
+      callbackToken: "token",
+      callbackAesKey: "aes",
+      outboundProxy: "",
+      webhookPath: "/wecom/callback",
+      tools: { doc: true },
+    }),
     listWecomAccountIds: () => ["default"],
     listWebhookTargetAliases: () => ["ops"],
     listAllWebhookTargetAliases: () => ["ops", "alerts"],
@@ -67,8 +77,10 @@ test("/status command sends status text", async () => {
   });
   assert.equal(sent.length, 1);
   assert.match(sent[0].text, /插件版本：0\.5\.3/);
+  assert.match(sent[0].text, /收消息：Agent 回调已配置/);
   assert.match(sent[0].text, /命名 Webhook 目标/);
   assert.match(sent[0].text, /命令 whisper/);
+  assert.match(sent[0].text, /路由策略：动态 Agent/);
   assert.match(sent[0].text, /微信插件入口联系人：Agent 模式可见/);
 });
 
@@ -76,6 +88,7 @@ test("buildWecomBotStatusText renders bot webhook and features", () => {
   const { handlers } = createHandlers();
   const text = handlers.buildWecomBotStatusText({ logger: {} }, "dingxiang");
   assert.match(text, /企业微信 AI 机器人/);
+  assert.match(text, /收消息：缺少 Bot webhook 或长连接凭证|收消息：Bot/);
   assert.match(text, /Bot Webhook：\/wecom\/bot\/callback/);
   assert.match(text, /回包兜底链路/);
   assert.match(text, /企业微信 Bot 平台限制/);

@@ -19,6 +19,9 @@ function createPluginHarness(overrides = {}) {
     corpId: "ww1",
     corpSecret: "sec",
     agentId: "1001",
+    callbackToken: "token",
+    callbackAesKey: "aes",
+    webhookPath: "/wecom/callback",
     outboundProxy: "",
     webhooks: { ops: { url: "https://example.com", key: "k1" } },
   };
@@ -97,6 +100,20 @@ test("channel plugin status localizes default account name and computes connecte
 
   const summary = plugin.status.buildChannelSummary({ snapshot });
   assert.equal(summary.connected, true);
+});
+
+test("channel plugin exposes pairing metadata and quickstart hints", async () => {
+  const { plugin, calls } = createPluginHarness();
+  assert.equal(plugin.meta.quickstartAllowFrom, true);
+  assert.equal(plugin.pairing.idLabel, "wecomUserId");
+  assert.equal(plugin.pairing.normalizeAllowEntry("wecom:Alice"), "alice");
+
+  await plugin.pairing.notifyApproval({
+    cfg: { channels: { wecom: {} } },
+    id: "wecom:Alice",
+  });
+  assert.equal(calls.sendText.length, 1);
+  assert.equal(calls.sendText[0].toUser, "alice");
 });
 
 test("channel plugin status exposes last inbound timestamp from webhook activity", () => {

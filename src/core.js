@@ -55,7 +55,7 @@ const BOT_CARD_MODE_SET = new Set(["markdown", "template_card"]);
 const DELIVERY_FALLBACK_LAYER_SET = new Set(DEFAULT_DELIVERY_FALLBACK_ORDER);
 const DYNAMIC_AGENT_MAP_SPLITTER = /[,\n]/;
 const GROUP_CHAT_TRIGGER_MODE_SET = new Set(["direct", "mention", "keyword"]);
-const DM_POLICY_MODE_SET = new Set(["open", "allowlist", "deny"]);
+const DM_POLICY_MODE_SET = new Set(["open", "allowlist", "pairing", "deny"]);
 const DYNAMIC_AGENT_MODE_SET = new Set(["mapping", "deterministic", "hybrid"]);
 const DYNAMIC_AGENT_ID_STRATEGY_SET = new Set(["readable-hash"]);
 const LEGACY_INLINE_ACCOUNT_RESERVED_KEYS = new Set([
@@ -582,6 +582,7 @@ function normalizeWecomDmPolicyMode(value, fallback = "open") {
     .toLowerCase();
   if (!normalized) return fallback;
   if (normalized === "closed" || normalized === "close") return "deny";
+  if (normalized === "disabled") return "deny";
   if (normalized === "whitelist") return "allowlist";
   if (DM_POLICY_MODE_SET.has(normalized)) return normalized;
   return fallback;
@@ -836,9 +837,16 @@ export function resolveWecomDmPolicyConfig({
     channelDmConfig.rejectMessage,
     channelDmConfig.blockMessage,
     readDmRejectMessageEnv(envVars, processEnv, accountId),
-    mode === "deny" ? "当前渠道私聊已关闭，请联系管理员。" : "当前私聊账号未授权，请联系管理员。",
+    mode === "deny"
+      ? "当前渠道私聊已关闭，请联系管理员。"
+      : mode === "pairing"
+        ? "当前私聊需先完成配对审批。"
+        : "当前私聊账号未授权，请联系管理员。",
   );
-  const effectiveMode = mode === "allowlist" && allowFrom.length === 0 ? "deny" : mode;
+  const effectiveMode =
+    mode === "allowlist" && allowFrom.length === 0
+      ? "deny"
+      : mode;
   return {
     mode: effectiveMode,
     allowFrom,

@@ -29,3 +29,13 @@ test("openclaw.plugin.json exposes wecom doc tool config", () => {
     true,
   );
 });
+
+test("openclaw.plugin.json supports dm pairing mode", () => {
+  const manifestPath = path.resolve(process.cwd(), "openclaw.plugin.json");
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+  const topLevelModes = manifest?.configSchema?.properties?.dm?.properties?.mode?.enum ?? [];
+  const accountModes =
+    manifest?.configSchema?.properties?.accounts?.additionalProperties?.properties?.dm?.properties?.mode?.enum ?? [];
+  assert.equal(topLevelModes.includes("pairing"), true);
+  assert.equal(accountModes.includes("pairing"), true);
+});

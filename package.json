@@ -1,6 +1,6 @@
 {
   "name": "@dingxiang-me/openclaw-wechat",
-  "version": "2.0.1",
+  "version": "2.1.0",
   "type": "module",
   "description": "WeCom (企业微信) channel plugin for OpenClaw (自建应用回调 + 发送 API).",
   "license": "MIT",
@@ -24,10 +24,13 @@
       "id": "wecom",
       "label": "企业微信 WeCom",
       "selectionLabel": "企业微信 WeCom（自建应用/Bot）",
+      "detailLabel": "企业微信自建应用 / Bot",
       "docsPath": "/channels/wecom",
       "docsLabel": "wecom",
       "blurb": "企业微信消息通道（自建应用回调 + Bot 回调 + 发送 API）。",
       "order": 80,
+      "systemImage": "building.2.crop.circle",
+      "quickstartAllowFrom": true,
       "aliases": [
         "wework",
         "qiwei",

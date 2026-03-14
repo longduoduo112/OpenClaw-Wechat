@@ -242,6 +242,21 @@ function summarizeAccountReports(accountReports = []) {
   };
 }
 
+function buildAgentOverview({ config, account } = {}) {
+  const bindingsCount = Array.isArray(config?.bindings) ? config.bindings.length : 0;
+  const dynamicAgentEnabled =
+    config?.channels?.wecom?.dynamicAgent?.enabled === true || config?.channels?.wecom?.dynamicAgents?.enabled === true;
+  const canReceive = Boolean(account?.callbackToken && account?.callbackAesKey && account?.webhookPath);
+  const canReply = Boolean(account?.corpId && account?.corpSecret && account?.agentId);
+  return {
+    canReceive,
+    canReply,
+    canSend: canReply,
+    bindingsCount,
+    dynamicAgentEnabled,
+  };
+}
+
 function listLegacyInlineAccountIds(channelConfig) {
   if (!channelConfig || typeof channelConfig !== "object") return [];
   const ids = [];
@@ -400,6 +415,13 @@ function reportAndExit(report, asJson = false) {
   for (const accountReport of accountReports) {
     console.log(`\nAccount: ${accountReport.accountId}`);
     console.log(`- endpoint: ${accountReport.endpoint}`);
+    const overview = buildAgentOverview({ config: report.config, account: accountReport.account });
+    console.log(
+      `- readiness: receive=${overview.canReceive ? "yes" : "no"} reply=${overview.canReply ? "yes" : "no"} send=${overview.canSend ? "yes" : "no"}`,
+    );
+    console.log(
+      `- routing: bindings=${overview.bindingsCount} dynamicAgent=${overview.dynamicAgentEnabled ? "on" : "off"}`,
+    );
     for (const check of accountReport.checks) {
       console.log(`${check.ok ? "OK " : "FAIL"} ${check.name} :: ${check.detail}`);
     }
@@ -630,6 +652,7 @@ async function main() {
     const report = {
       args,
       configPath,
+      config: null,
       accounts: [
         {
           configPath,
@@ -661,6 +684,7 @@ async function main() {
   const report = {
     args,
     configPath,
+    config,
     accounts: accountReports,
     summary: summarizeAccountReports(accountReports),
   };

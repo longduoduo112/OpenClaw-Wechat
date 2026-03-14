@@ -10,7 +10,7 @@ OpenClaw-Wechat is an OpenClaw channel plugin for Enterprise WeChat (WeCom), wit
 
 ## Table of Contents
 
-- [Major Update (v2.0.0)](#major-update-v200)
+- [Onboarding Update (v2.1.0)](#onboarding-update-v210)
 - [Highlights](#highlights)
 - [Mode Comparison](#mode-comparison)
 - [5-Minute Quick Start](#5-minute-quick-start)
@@ -28,41 +28,27 @@ OpenClaw-Wechat is an OpenClaw channel plugin for Enterprise WeChat (WeCom), wit
 - [Development](#development)
 - [FAQ](#faq)
 
-## Major Update (v2.0.0)
+## Onboarding Update (v2.1.0)
 
-This is a real capability update, not a minor patch.  
-`OpenClaw-Wechat` now has **working WeCom Bot long-connection support** in real gateway runtime.
+This release focuses on setup quality, not feature sprawl. The goal is to make `OpenClaw-Wechat` behave more like a native OpenClaw channel during install and first-run.
 
-### WeCom Bot long connection
+### What changed
 
 | Item | Result |
 |---|---|
-| Official endpoint | `wss://openws.work.weixin.qq.com` |
-| Inbound commands | `aibot_msg_callback` / `aibot_event_callback` |
-| Outbound command | `aibot_respond_msg` |
-| Runtime | switched to `ws`, no longer blocked by built-in Node WebSocket `1006` failures |
-| Public Bot callback required | no, not in long-connection mode |
-| Verification command | `npm run wecom:bot:longconn:probe -- --json` |
-
-### Control UI and operations
-
-This release also keeps the earlier operations improvements: **WeCom supports visual configuration in Control UI**, so you no longer need to rely on manual JSON edits only.
-
-### Visual config in Control UI
-
-| Item | Status | Notes |
-|---|---|---|
-| WeCom config form | ✅ | `channels.wecom` can be edited/saved directly from UI |
-| Localized labels | ✅ | Common fields are now clearly labeled in Chinese for ops teams |
-| Sensitive-field hints | ✅ | secret/token/aesKey fields are marked as sensitive |
-| Runtime status clarity | ✅ | `Connected` is no longer stuck at `n/a`; default account display name is localized |
-| Inbound activity tracking | ✅ | `Last inbound` is updated after webhook callbacks (`n/a` before first inbound after restart is expected) |
+| DM pairing approval | Added `dm.mode=pairing`, backed by OpenClaw native pairing flow |
+| Quickstart metadata | Added `detailLabel`, `systemImage`, and `quickstartAllowFrom` |
+| `/status` readability | Status now leads with `receive / reply / send / media / voice / doc` readiness |
+| Selfcheck summaries | `wecom:selfcheck`, `wecom:agent:selfcheck`, and `wecom:bot:selfcheck` now print `readiness` and `routing` summaries |
+| Route visibility | Status and selfcheck now show whether routing comes from `bindings` or `dynamicAgent` |
+| Long-connection log noise | Normal connect / opened / subscribed logs moved to `debug` |
 
 ### Practical impact
 
-- Configure WeCom directly in `Channels -> WeCom` without hand-editing large config files.
-- Better readability for day-to-day ops and handover.
-- More accurate runtime status display reduces false alarm on “plugin not working”.
+- New users can start from the smallest working config, then add multi-account or dynamic routing later.
+- Teams that want controlled DM access can now use `pairing` instead of maintaining `allowFrom` only.
+- `/status` and selfcheck answer “can it receive, reply, and send?” before lower-level transport details.
+- Bot long-connection is quieter by default while still keeping useful warnings and errors.
 
 ## Highlights
 
@@ -75,7 +61,7 @@ This release also keeps the earlier operations improvements: **WeCom supports vi
 | Bot card replies | ✅ | `markdown/template_card` with automatic text fallback |
 | Multi-account support | ✅ | `channels.wecom.accounts.<id>` |
 | Sender allowlist and admin bypass | ✅ | `allowFrom` + `adminUsers` |
-| Direct-message policy | ✅ | `dm.mode=open/allowlist/deny` + account overrides |
+| Direct-message policy | ✅ | `dm.mode=open/allowlist/pairing/deny` + account overrides |
 | Event welcome reply (`enter_agent`) | ✅ | configurable via `events.enterAgentWelcome*` |
 | Command allowlist | ✅ | `/help`, `/status`, `/clear`, `/new`, etc. |
 | Group trigger policy | ✅ | mention-required or direct-trigger |
@@ -103,7 +89,7 @@ This release also keeps the earlier operations improvements: **WeCom supports vi
 openclaw plugins install @dingxiang-me/openclaw-wechat
 ```
 
-Recommended minimum package version: `2.0.0`. If `plugins.installs.openclaw-wechat` in `openclaw.json` still reports `1.7.x`, upgrade or reinstall first; those older npm packages do not expose the current WeCom channel metadata.
+Recommended minimum package version: `2.1.0`. If `plugins.installs.openclaw-wechat` in `openclaw.json` still reports `1.7.x`, upgrade or reinstall first; those older npm packages do not expose the current WeCom channel metadata.
 
 For local development or direct source-path loading, use:
 
@@ -159,6 +145,20 @@ If you are loading from source path instead, use the version below with `load.pa
 
 > Agent-mode note (important): configure **Trusted IP** in the WeCom self-built app settings and include the real egress IP of your OpenClaw gateway. Otherwise you may see "messages received but no reply".
 
+If you want first-contact DM approval, add:
+
+```json
+{
+  "channels": {
+    "wecom": {
+      "dm": {
+        "mode": "pairing"
+      }
+    }
+  }
+}
+```
+
 ### 4) Restart and verify
 
 ```bash
@@ -168,6 +168,11 @@ npm run wecom:selfcheck -- --all-accounts
 npm run wecom:agent:selfcheck -- --all-accounts
 npm run wecom:bot:selfcheck -- --all-accounts
 ```
+
+Selfcheck now starts with two summary lines:
+
+- `readiness`: whether receive / reply / send are currently usable
+- `routing`: whether `bindings` and `dynamicAgent` are active
 
 ## Requirements
 
@@ -310,7 +315,7 @@ When multi-account is enabled, each account can override Bot callback credential
 | Sender ACL | `allowFrom`, `allowFromRejectMessage` |
 | Command ACL | `commands.enabled`, `commands.allowlist`, `commands.rejectMessage` |
 | Admin bypass | `adminUsers` |
-| Direct-message policy | `dm.mode`, `dm.allowFrom`, `dm.rejectMessage` |
+| Direct-message policy | `dm.mode`, `dm.allowFrom`, `dm.rejectMessage` (`open / allowlist / pairing / deny`) |
 | Event policy | `events.enabled`, `events.enterAgentWelcomeEnabled`, `events.enterAgentWelcomeText` |
 | Group trigger | `groupChat.enabled`, `groupChat.triggerMode`, `groupChat.mentionPatterns`, `groupChat.triggerKeywords` |
 | Dynamic route | `dynamicAgent.*` (compatible with `dynamicAgents.*`, `dm.createAgentOnFirstMessage`) |
@@ -433,7 +438,7 @@ Outbound target formats:
 |---|---|
 | `WECOM_ALLOW_FROM*` | sender authorization |
 | `WECOM_COMMANDS_*` | command ACL |
-| `WECOM_DM_*`, `WECOM_<ACCOUNT>_DM_*` | DM policy + allowlist |
+| `WECOM_DM_*`, `WECOM_<ACCOUNT>_DM_*` | DM policy + allowlist / pairing controls |
 | `WECOM_EVENTS_*`, `WECOM_<ACCOUNT>_EVENTS_*` | event handling + enter_agent welcome text |
 | `WECOM_GROUP_CHAT_*` | group trigger policy |
 | `WECOM_DEBOUNCE_*` | text debounce |

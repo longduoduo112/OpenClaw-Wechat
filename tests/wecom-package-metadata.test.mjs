@@ -9,6 +9,7 @@ test("package.json declares openclaw install metadata", () => {
   const pkg = JSON.parse(fs.readFileSync(packagePath, "utf8"));
   assert.equal(pkg?.openclaw?.install?.defaultChoice, "npm");
   assert.equal(pkg?.openclaw?.install?.npmSpec, "@dingxiang-me/openclaw-wechat");
+  assert.equal(pkg?.openclaw?.channel?.quickstartAllowFrom, true);
 });
 
 test("package metadata, plugin manifest, and runtime constant stay version-synced", () => {
@@ -16,7 +17,7 @@ test("package metadata, plugin manifest, and runtime constant stay version-synce
   const manifestPath = path.resolve(process.cwd(), "openclaw.plugin.json");
   const pkg = JSON.parse(fs.readFileSync(packagePath, "utf8"));
   const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
-  assert.equal(pkg.version, "2.0.0");
+  assert.equal(pkg.version, "2.1.0");
   assert.equal(manifest.version, pkg.version);
   assert.equal(PLUGIN_VERSION, pkg.version);
   assert.equal(pkg?.openclaw?.channel?.id, "wecom");

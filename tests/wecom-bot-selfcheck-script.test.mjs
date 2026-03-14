@@ -154,7 +154,7 @@ test("wecom-bot-selfcheck flags stale npm install metadata", async () => {
   );
   assert.ok(versionCheck);
   assert.equal(versionCheck.ok, false);
-  assert.match(versionCheck.detail, /expected>=2\.0\.0/);
+  assert.match(versionCheck.detail, /expected>=2\.1\.0/);
 });
 
 test("wecom-bot-selfcheck performs URL verify check", async (t) => {

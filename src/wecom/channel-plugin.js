@@ -3,6 +3,7 @@ import {
   getWecomChannelInboundActivity,
   getWecomInboundActivity,
 } from "./channel-status-state.js";
+import { normalizeWecomAllowFromEntry } from "../core.js";
 
 function assertFunction(name, fn) {
   if (typeof fn !== "function") {
@@ -160,9 +161,30 @@ export function createWecomChannelPlugin({
       id: "wecom",
       label: "企业微信 WeCom",
       selectionLabel: "企业微信 WeCom（自建应用/Bot）",
+      detailLabel: "企业微信自建应用 / Bot",
       docsPath: "/channels/wecom",
       blurb: "企业微信消息通道（自建应用回调 + Bot 回调 + 发送 API）。",
       aliases: ["wework", "qiwei", "wxwork"],
+      systemImage: "building.2.crop.circle",
+      quickstartAllowFrom: true,
+    },
+    pairing: {
+      idLabel: "wecomUserId",
+      normalizeAllowEntry: (entry) => normalizeWecomAllowFromEntry(entry),
+      notifyApproval: async ({ cfg, id }) => {
+        const normalizedUserId = normalizeWecomAllowFromEntry(id);
+        if (!normalizedUserId) return;
+        const config = getWecomConfig({ config: cfg }, "default");
+        if (!config?.corpId || !config?.corpSecret || !config?.agentId) return;
+        await sendWecomText({
+          corpId: config.corpId,
+          corpSecret: config.corpSecret,
+          agentId: config.agentId,
+          toUser: normalizedUserId,
+          text: "OpenClaw: your access has been approved.",
+          proxyUrl: config.outboundProxy,
+        });
+      },
     },
     configSchema: {
       schema: wecomChannelConfigSchema,

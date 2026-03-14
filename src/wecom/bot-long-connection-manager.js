@@ -260,7 +260,7 @@ export function createWecomBotLongConnectionManager({
     if (!agent) {
       agent = new wsProxyAgentCtor(proxyUrl);
       wsProxyAgentCache.set(proxyUrl, agent);
-      api?.logger?.info?.(
+      api?.logger?.debug?.(
         `wecom(bot-longconn): websocket proxy enabled account=${client.accountId} proxy=${printableProxy}`,
       );
     }
@@ -729,7 +729,7 @@ export function createWecomBotLongConnectionManager({
             transport: "bot.longConnection",
           });
           startPingLoop(client, api);
-          api?.logger?.info?.(`wecom(bot-longconn): subscribed account=${client.accountId}`);
+          api?.logger?.debug?.(`wecom(bot-longconn): subscribed account=${client.accountId}`);
         } else {
           api?.logger?.warn?.(
             `wecom(bot-longconn): subscribe failed account=${client.accountId} errcode=${errcode} errmsg=${errmsg}`,
@@ -799,7 +799,7 @@ export function createWecomBotLongConnectionManager({
         `wecom(bot-longconn): websocket proxy init failed account=${client.accountId}: ${String(err?.message || err)}`,
       );
     }
-    api?.logger?.info?.(
+    api?.logger?.debug?.(
       `wecom(bot-longconn): connect attempt account=${client.accountId} marker=${LONG_CONNECTION_RUNTIME_MARKER} url=${wsUrl} proxy=${proxyUrl || "direct"} wsCtor=${String(webSocketCtor?.name || "unknown")}`,
     );
     client.ws = new webSocketCtor(wsUrl, [], wsOptions);
@@ -822,7 +822,7 @@ export function createWecomBotLongConnectionManager({
             secret: client.config.longConnection.secret,
           },
         }) || "";
-      api?.logger?.info?.(`wecom(bot-longconn): socket opened account=${client.accountId} url=${wsUrl}`);
+      api?.logger?.debug?.(`wecom(bot-longconn): socket opened account=${client.accountId} url=${wsUrl}`);
     });
     bindSocketListener(client.ws, "message", (event) => {
       void handleSocketMessage(client, api, event);

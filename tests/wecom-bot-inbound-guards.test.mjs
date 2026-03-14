@@ -45,8 +45,8 @@ test("applyWecomBotGroupChatGuard strips mentions when configured", () => {
   assert.equal(result.commandBody, "hello");
 });
 
-test("applyWecomBotCommandAndSenderGuard blocks unauthorized sender", () => {
-  const result = applyWecomBotCommandAndSenderGuard({
+test("applyWecomBotCommandAndSenderGuard blocks unauthorized sender", async () => {
+  const result = await applyWecomBotCommandAndSenderGuard({
     api: {},
     fromUser: "u1",
     msgType: "text",
@@ -65,8 +65,8 @@ test("applyWecomBotCommandAndSenderGuard blocks unauthorized sender", () => {
   assert.equal(result.finishText, "当前账号未授权，请联系管理员。");
 });
 
-test("applyWecomBotCommandAndSenderGuard translates /clear to /reset", () => {
-  const result = applyWecomBotCommandAndSenderGuard({
+test("applyWecomBotCommandAndSenderGuard translates /clear to /reset", async () => {
+  const result = await applyWecomBotCommandAndSenderGuard({
     api: {},
     fromUser: "u1",
     msgType: "text",
@@ -94,8 +94,8 @@ test("applyWecomBotCommandAndSenderGuard translates /clear to /reset", () => {
   assert.equal(result.commandBody.startsWith("/reset"), true);
 });
 
-test("applyWecomBotCommandAndSenderGuard translates /new to /reset and allows /new allowlist", () => {
-  const result = applyWecomBotCommandAndSenderGuard({
+test("applyWecomBotCommandAndSenderGuard translates /new to /reset and allows /new allowlist", async () => {
+  const result = await applyWecomBotCommandAndSenderGuard({
     api: {},
     fromUser: "u1",
     msgType: "text",
@@ -123,7 +123,7 @@ test("applyWecomBotCommandAndSenderGuard translates /new to /reset and allows /n
   assert.equal(result.commandBody.startsWith("/reset"), true);
 });
 
-test("applyWecomBotCommandAndSenderGuard handles /help and /status directly", () => {
+test("applyWecomBotCommandAndSenderGuard handles /help and /status directly", async () => {
   const common = {
     api: {},
     fromUser: "u1",
@@ -143,7 +143,7 @@ test("applyWecomBotCommandAndSenderGuard handles /help and /status directly", ()
     buildWecomBotStatusText: () => "status text",
   };
 
-  const helpResult = applyWecomBotCommandAndSenderGuard({
+  const helpResult = await applyWecomBotCommandAndSenderGuard({
     ...common,
     commandBody: "/help",
     extractLeadingSlashCommand: () => "/help",
@@ -151,7 +151,7 @@ test("applyWecomBotCommandAndSenderGuard handles /help and /status directly", ()
   assert.equal(helpResult.ok, false);
   assert.equal(helpResult.finishText, "help text");
 
-  const statusResult = applyWecomBotCommandAndSenderGuard({
+  const statusResult = await applyWecomBotCommandAndSenderGuard({
     ...common,
     commandBody: "/status",
     extractLeadingSlashCommand: () => "/status",
@@ -160,8 +160,8 @@ test("applyWecomBotCommandAndSenderGuard handles /help and /status directly", ()
   assert.equal(statusResult.finishText, "status text");
 });
 
-test("applyWecomBotCommandAndSenderGuard blocks direct message when dm policy deny", () => {
-  const result = applyWecomBotCommandAndSenderGuard({
+test("applyWecomBotCommandAndSenderGuard blocks direct message when dm policy deny", async () => {
+  const result = await applyWecomBotCommandAndSenderGuard({
     api: {},
     fromUser: "u1",
     isGroupChat: false,
@@ -178,4 +178,35 @@ test("applyWecomBotCommandAndSenderGuard blocks direct message when dm policy de
   });
   assert.equal(result.ok, false);
   assert.equal(result.finishText, "dm disabled");
+});
+
+test("applyWecomBotCommandAndSenderGuard returns pairing reply when pairing challenge is created", async () => {
+  const result = await applyWecomBotCommandAndSenderGuard({
+    api: {
+      runtime: {
+        channel: {
+          pairing: {
+            readAllowFromStore: async () => [],
+            upsertPairingRequest: async () => ({ code: "XYZ789", created: true }),
+            buildPairingReply: ({ code }) => `pairing:${code}`,
+          },
+        },
+      },
+    },
+    accountId: "default",
+    fromUser: "dingxiang",
+    isGroupChat: false,
+    msgType: "text",
+    commandBody: "hello",
+    normalizedFromUser: "dingxiang",
+    resolveWecomCommandPolicy: () => ({ enabled: false, adminUsers: [], allowlist: [], rejectMessage: "cmd blocked" }),
+    resolveWecomAllowFromPolicy: () => ({ allowFrom: ["*"], rejectMessage: "blocked" }),
+    resolveWecomDmPolicy: () => ({ mode: "pairing", allowFrom: [], rejectMessage: "need pairing" }),
+    isWecomSenderAllowed: ({ senderId, allowFrom }) => allowFrom.includes("*") || allowFrom.includes(senderId),
+    extractLeadingSlashCommand: () => "",
+    buildWecomBotHelpText: () => "help",
+    buildWecomBotStatusText: () => "status",
+  });
+  assert.equal(result.ok, false);
+  assert.equal(result.finishText, "pairing:XYZ789");
 });

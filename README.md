@@ -12,7 +12,7 @@ OpenClaw-Wechat 是一个面向 OpenClaw 的企业微信渠道插件，支持两
 
 ## 目录
 
-- [重大更新（v2.0.0）](#重大更新v200)
+- [接入更新（v2.1.0）](#接入更新v210)
 - [功能概览](#功能概览)
 - [模式对比](#模式对比)
 - [5 分钟极速上手](#5-分钟极速上手)
@@ -33,75 +33,42 @@ OpenClaw-Wechat 是一个面向 OpenClaw 的企业微信渠道插件，支持两
 - [FAQ](#faq)
 - [版本与贡献](#版本与贡献)
 
-## 重大更新（v2.0.0）
+## 接入更新（v2.1.0）
 
-这次是一次真正的能力级更新，不是小修补。  
-`OpenClaw-Wechat` 现在已经把 **企业微信智能机器人长连接** 正式做成可用能力，并且已经在真实网关环境下完成：
+这版不是继续堆新平台能力，而是把接入体验收口到“更像 OpenClaw 原生渠道”的状态。
 
-- WebSocket 握手成功
-- `aibot_subscribe` 鉴权成功
-- 心跳 `ping` / 回执成功
-- 网关日志出现 `socket opened` 和 `subscribed`
-
-### 企业微信 Bot 长连接已正式可用
+### 这版新增了什么
 
 | 项目 | 结果 |
 |---|---|
-| 官方地址 | `wss://openws.work.weixin.qq.com` |
-| 入站命令 | `aibot_msg_callback` / `aibot_event_callback` |
-| 出站命令 | `aibot_respond_msg` |
-| 运行时实现 | 已切换为 `ws`，不再使用会导致 `1006` 的 Node 内置 WebSocket |
-| Bot 回调公网依赖 | 长连接模式下不需要 |
-| 自检命令 | `npm run wecom:bot:longconn:probe -- --json` |
+| 私聊配对审批 | 新增 `dm.mode=pairing`，首次私聊会生成 OpenClaw 原生配对审批 |
+| Quickstart 元信息 | 渠道 metadata 补齐 `detailLabel`、`systemImage`、`quickstartAllowFrom` |
+| `/status` 可读性 | 优先展示 `收消息 / 回消息 / 主动发送 / 媒体 / 语音 / 文档` 准备情况 |
+| Selfcheck 摘要 | `wecom:selfcheck` / `wecom:agent:selfcheck` / `wecom:bot:selfcheck` 新增 `readiness` 与 `routing` 摘要 |
+| 路由可见性 | 明确显示当前是否命中 `bindings` 或 `dynamicAgent` |
+| 长连接日志降噪 | 正常的 connect / opened / subscribed 改为 `debug`，减少默认噪音 |
 
-这次版本同时还保留并增强了原有的 **WeCom Doc 工具链**。  
-现在 `OpenClaw-Wechat` 已经同时具备：
+### 这版对接入有什么实际影响
 
-- 后台可视化配置
-- WeCom Doc 文档/表格/收集表工具
-- 文档权限与协作者管理
-- 分享链接可用性诊断
-- 文档权限打不开问题的直接诊断
-- 链接文本输出完整性修复（URL 下划线不再丢失）
+- 新用户现在可以按最小配置先跑通，再决定是否启用多账号、动态路由和文档工具。
+- 需要私聊审批时，不再只能靠手写 `allowFrom`，可以直接用 `pairing` 模式接到 OpenClaw 审批流。
+- `/status` 和 selfcheck 先回答“能不能收、能不能回、能不能发”，再展开工程细节。
+- Bot 长连接默认日志更安静，排障时再开 `debug` 看正常心跳和订阅细节。
 
-### 这次版本解决了什么
+### 当前推荐的接入顺序
 
-| 场景 | 旧问题 | 现在的处理方式 |
-|---|---|---|
-| 企业微信 Bot 长连接 | 旧版地址、命令字和运行时实现不对，连接阶段直接 `1006` | 已对齐官方地址、协议命令和 `ws` 实现，真实网关已订阅成功 |
-| 想验证“到底连上没有” | 只能看零散日志，难以区分握手、鉴权还是心跳失败 | `wecom:bot:longconn:probe` 会直接验证握手、鉴权与心跳 |
-| 创建文档后自己打不开 | 文档创建成功，但发起人没被自动授权 | `create` 默认自动把当前企微请求人加入协作者 |
-| 分享链接能发出来，但别人打开像“文档不存在” | 无法快速判断是权限、分享码还是 guest 访问问题 | `validate_share_link` 直接诊断 `guest / blankpage / scode / 路径资源 ID` |
-| 只知道“更新成员权限成功”，但还是打不开 | 成员权限、查看规则、外部分享是三套概念，容易混淆 | `diagnose_auth` 直接输出企业内/企业外访问、查看成员、协作者与请求人角色 |
-| 把分享链接路径当成 `docId` 使用 | 后续 API 调用报 `invalid docid` | `create/share/get_auth` 结果显式返回真实 `docId`，并给出使用提示 |
-| 链接里有下划线，发出去后被改坏 | Markdown 清洗误伤 URL | 文本格式化已修复，URL 下划线完整保留 |
-
-### 可视化配置能力（Control UI）
-
-| 项目 | 现状 | 说明 |
-|---|---|---|
-| WeCom 配置表单 | ✅ | `channels.wecom` 支持在后台页面直接编辑与保存 |
-| 中文字段标签 | ✅ | 常用字段（如 `corpId`、`callbackToken`、`accounts.*`）均已中文化 |
-| 敏感项标记 | ✅ | `secret/token/aesKey` 字段按敏感项展示 |
-| 状态展示 | ✅ | `Connected` 不再长期 `n/a`，默认账号显示名中文化为“默认账号” |
-| 入站状态追踪 | ✅ | 收到回调后自动更新 `Last inbound`（重启后首次入站前为 `n/a` 属正常） |
-| 文档工具开关 | ✅ | `tools.doc` 等文档相关配置可被 schema 正确识别 |
-
-### 文档工具升级摘要
-
-| 能力层 | 新增内容 |
-|---|---|
-| 文档基础 | `create`、`rename`、`get_info`、`share`、`delete` |
-| 权限管理 | `grant_access`、`add_collaborators`、`set_join_rule`、`set_member_auth`、`set_safety_setting` |
-| 运维诊断 | `get_auth`、`diagnose_auth`、`validate_share_link` |
-| 表格/收集表 | `get_sheet_properties`、`create_collect`、`modify_collect`、`get_form_info`、`get_form_answer`、`get_form_statistic` |
-
-### 你升级后能直接获得的变化
-
-- 在 OpenClaw 后台的 `Channels -> WeCom` 页面可直接配置并保存核心参数。
-- 在同一个插件里直接调用 `wecom_doc`，不需要额外安装第二个 WeCom Doc 插件。
-- 现在排查“为什么这个链接打不开”不需要再手翻日志和原始 JSON，工具会直接给出结论。
-- 文档创建、协作者授权、分享链接诊断已经形成闭环，适合直接上线给真实企微用户使用。
+1. 先选一个主入口：
+   - Bot 长连接：适合最快跑通对话
+   - Agent：适合需要主动发送、菜单、自建应用能力
+2. 再决定私聊准入：
+   - `open`：直接可聊
+   - `allowlist`：仅显式白名单
+   - `pairing`：首次私聊先审批
+3. 最后再加增强项：
+   - `bindings`
+   - `dynamicAgent`
+   - `wecom_doc`
+   - 本地语音转写
 
 ## 5 分钟极速上手
 
@@ -113,7 +80,7 @@ OpenClaw-Wechat 是一个面向 OpenClaw 的企业微信渠道插件，支持两
 openclaw plugins install @dingxiang-me/openclaw-wechat
 ```
 
-> 最低建议版本：`2.0.0`。如果 `openclaw.json` 里的 `plugins.installs.openclaw-wechat` 仍显示 `1.7.x`，请先升级或重装；旧包不会正确注册 `wecom` channel 元数据。
+> 最低建议版本：`2.1.0`。如果 `openclaw.json` 里的 `plugins.installs.openclaw-wechat` 仍显示 `1.7.x`，请先升级或重装；旧包不会正确注册 `wecom` channel 元数据。
 
 如果你是在本地开发或要直接跑仓库源码，再用下面这套：
 
@@ -170,6 +137,20 @@ npm install
 
 > Agent 模式补充（重要）：在企业微信自建应用后台请配置**可信 IP**，把 OpenClaw 网关实际出网 IP 加入白名单。否则可能出现“能收到消息但不回复”。
 
+如果你希望私聊先审批，再开放会话，可以直接加：
+
+```json
+{
+  "channels": {
+    "wecom": {
+      "dm": {
+        "mode": "pairing"
+      }
+    }
+  }
+}
+```
+
 ### Step 4. 重启并自检
 
 ```bash
@@ -179,6 +160,11 @@ npm run wecom:selfcheck -- --all-accounts
 npm run wecom:agent:selfcheck -- --all-accounts
 npm run wecom:bot:selfcheck -- --all-accounts
 ```
+
+现在自检输出会先给出两行摘要：
+
+- `readiness`: 当前是否能收、能回、能发
+- `routing`: 当前是否启用 `bindings` 和 `dynamicAgent`
 
 ### Step 5. 发一条消息验证
 
@@ -201,7 +187,7 @@ npm run wecom:bot:selfcheck -- --all-accounts
 | Bot 卡片回包 | ✅ | 支持 `markdown/template_card`，失败自动降级文本 |
 | 多账户 | ✅ | `channels.wecom.accounts.<id>` |
 | 发送者授权控制 | ✅ | `allowFrom` + 账户级覆盖 |
-| 私聊策略（DM） | ✅ | `dm.mode=open/allowlist/deny` + 账户级覆盖 |
+| 私聊策略（DM） | ✅ | `dm.mode=open/allowlist/pairing/deny` + 账户级覆盖 |
 | 事件欢迎语（enter_agent） | ✅ | `events.enterAgentWelcome*` 可配置 |
 | 命令白名单 | ✅ | `/help` `/status` `/clear` `/new` 等 |
 | 群聊触发策略 | ✅ | 支持 `direct/mention/keyword` 三种模式 |
@@ -662,7 +648,7 @@ node ./scripts/wecom-bot-selfcheck.mjs --help
 | 拒绝文案 | `allowFromRejectMessage` | 未授权提示 |
 | 管理员 | `adminUsers` | 绕过命令白名单 |
 | 命令白名单 | `commands.enabled` + `commands.allowlist` | 限制 `/` 指令 |
-| 私聊策略 | `dm.mode` + `dm.allowFrom` + `dm.rejectMessage` | 控制私聊开放/白名单/拒绝 |
+| 私聊策略 | `dm.mode` + `dm.allowFrom` + `dm.rejectMessage` | 控制私聊开放/白名单/配对审批/拒绝 |
 | 事件策略 | `events.enabled` + `events.enterAgentWelcomeEnabled` + `events.enterAgentWelcomeText` | 控制事件处理与 enter_agent 欢迎语 |
 | 群聊触发 | `groupChat.enabled` + `triggerMode` + `mentionPatterns` + `triggerKeywords` | 控制群消息触发条件（自建应用支持 `direct/mention/keyword`；Bot 模式按平台限制固定 `mention`） |
 | 动态路由 | `dynamicAgent.*`（兼容 `dynamicAgents.*`、`dm.createAgentOnFirstMessage`） | 动态 Agent + workspace bootstrap 播种 |

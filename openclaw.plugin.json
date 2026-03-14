@@ -1,7 +1,7 @@
 {
   "id": "openclaw-wechat",
   "name": "OpenClaw-Wechat",
-  "version": "2.0.1",
+  "version": "2.1.0",
   "description": "WeCom (企业微信) channel plugin for OpenClaw (自建应用回调 + 发送 API).",
   "channels": [
     "wecom"
@@ -672,10 +672,11 @@
             "enum": [
               "open",
               "allowlist",
+              "pairing",
               "deny"
             ],
             "default": "open",
-            "description": "私聊策略：open=开放，allowlist=白名单，deny=关闭"
+            "description": "私聊策略：open=开放，allowlist=白名单，pairing=首次私聊需审批，deny=关闭"
           },
           "rejectMessage": {
             "type": "string",
@@ -688,7 +689,7 @@
           },
           "allowFrom": {
             "type": "array",
-            "description": "私聊白名单（mode=allowlist 时生效）",
+            "description": "私聊白名单（mode=allowlist/pairing 时作为显式放行名单）",
             "items": {
               "type": "string",
               "minLength": 1
@@ -1194,14 +1195,15 @@
                   "enum": [
                     "open",
                     "allowlist",
+                    "pairing",
                     "deny"
                   ],
                   "default": "open",
-                  "description": "私聊策略：open=开放，allowlist=白名单，deny=关闭"
+                  "description": "私聊策略：open=开放，allowlist=白名单，pairing=首次私聊需审批，deny=关闭"
                 },
                 "allowFrom": {
                   "type": "array",
-                  "description": "私聊白名单（mode=allowlist 时生效）",
+                  "description": "私聊白名单（mode=allowlist/pairing 时作为显式放行名单）",
                   "items": {
                     "type": "string",
                     "minLength": 1

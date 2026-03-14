@@ -268,7 +268,7 @@ test("allowFrom policy supports dm.allowFrom compatibility keys", () => {
   assert.deepEqual(policy.allowFrom, ["legacy_dm_user"]);
 });
 
-test("resolveWecomDmPolicyConfig supports mode/allowlist and scoped env fallback", () => {
+test("resolveWecomDmPolicyConfig supports mode/allowlist/pairing and scoped env fallback", () => {
   const denyPolicy = core.resolveWecomDmPolicyConfig({
     channelConfig: {
       dm: {
@@ -302,18 +302,37 @@ test("resolveWecomDmPolicyConfig supports mode/allowlist and scoped env fallback
   assert.equal(allowlistPolicy.mode, "allowlist");
   assert.deepEqual(allowlistPolicy.allowFrom.sort(), ["alice", "bob"]);
 
+  const pairingPolicy = core.resolveWecomDmPolicyConfig({
+    channelConfig: {
+      dm: {
+        mode: "pairing",
+      },
+    },
+    accountConfig: {
+      dm: {
+        allowFrom: ["wecom:Alice"],
+      },
+    },
+    envVars: {},
+    processEnv: {},
+    accountId: "default",
+  });
+  assert.equal(pairingPolicy.mode, "pairing");
+  assert.deepEqual(pairingPolicy.allowFrom, ["alice"]);
+  assert.equal(pairingPolicy.rejectMessage, "当前私聊需先完成配对审批。");
+
   const scopedEnvPolicy = core.resolveWecomDmPolicyConfig({
     channelConfig: {},
     accountConfig: {},
     envVars: {
-      WECOM_SALES_DM_POLICY: "allowlist",
+      WECOM_SALES_DM_POLICY: "pairing",
       WECOM_SALES_DM_ALLOW_FROM: "user:Tom,wecom:Jerry",
       WECOM_SALES_DM_REJECT_MESSAGE: "销售私聊未授权",
     },
     processEnv: {},
     accountId: "sales",
   });
-  assert.equal(scopedEnvPolicy.mode, "allowlist");
+  assert.equal(scopedEnvPolicy.mode, "pairing");
   assert.deepEqual(scopedEnvPolicy.allowFrom.sort(), ["jerry", "tom"]);
   assert.equal(scopedEnvPolicy.rejectMessage, "销售私聊未授权");
 });

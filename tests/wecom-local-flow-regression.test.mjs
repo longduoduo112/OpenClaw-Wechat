@@ -284,7 +284,7 @@ test("local flow: agent webhook text debounce merges two encrypted callbacks int
     shouldStripWecomGroupMentions,
     stripWecomGroupMentions,
     extractLeadingSlashCommand,
-    resolveWecomTextDebouncePolicy: () => ({ enabled: true, windowMs: 30, maxBatch: 10 }),
+    resolveWecomTextDebouncePolicy: () => ({ enabled: true, windowMs: 80, maxBatch: 10 }),
     buildWecomSessionId,
     messageProcessLimiter: createLimiter(),
     executeInboundTaskWithSessionQueue: async ({ sessionId, task }) => {
@@ -356,7 +356,7 @@ test("local flow: agent webhook text debounce merges two encrypted callbacks int
   assert.equal(response2.status, 200);
   assert.equal(response2.text.trim().toLowerCase(), "success");
 
-  await sleep(80);
+  await sleep(160);
 
   assert.equal(processedPayloads.length, 1);
   assert.equal(processedPayloads[0].accountId, "sales");

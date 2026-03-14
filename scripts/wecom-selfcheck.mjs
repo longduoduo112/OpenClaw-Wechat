@@ -195,6 +195,23 @@ function summarizeAccounts(accountReports) {
   };
 }
 
+function buildAccountOverview({ config, resolved } = {}) {
+  const bindingsCount = Array.isArray(config?.bindings) ? config.bindings.length : 0;
+  const dynamicAgentEnabled =
+    config?.channels?.wecom?.dynamicAgent?.enabled === true || config?.channels?.wecom?.dynamicAgents?.enabled === true;
+  const canReceive = Boolean(resolved?.callbackToken && resolved?.callbackAesKey && resolved?.webhookPath);
+  const canReply = Boolean(resolved?.corpId && resolved?.corpSecret && resolved?.agentId);
+  const docEnabled = resolved?.tools?.doc !== false;
+  return {
+    canReceive,
+    canReply,
+    canSend: canReply,
+    docEnabled,
+    bindingsCount,
+    dynamicAgentEnabled,
+  };
+}
+
 function normalizeWebhookPath(raw, fallback = "/wecom/callback") {
   const input = String(raw ?? "").trim();
   if (!input) return fallback;
@@ -858,12 +875,19 @@ function reportAndExit(report, asJson = false) {
     console.log(`\nAccount: ${accountReport.accountId}`);
     if (accountReport.resolved) {
       const meta = accountReport.resolved;
+      const overview = buildAccountOverview({ config: report.config, resolved: meta });
       console.log(
         `- resolved: ${meta.accountId} source=${meta.source}${meta.fallbackFor ? ` fallback-for=${meta.fallbackFor}` : ""}`,
       );
       console.log(`- webhookPath: ${meta.webhookPath}`);
       console.log(`- namedWebhookTargets: ${meta.webhookTargetCount ?? 0}`);
       console.log(`- outboundProxy: ${meta.outboundProxy || "(none)"}`);
+      console.log(
+        `- readiness: receive=${overview.canReceive ? "yes" : "no"} reply=${overview.canReply ? "yes" : "no"} send=${overview.canSend ? "yes" : "no"} doc=${overview.docEnabled ? "on" : "off"}`,
+      );
+      console.log(
+        `- routing: bindings=${overview.bindingsCount} dynamicAgent=${overview.dynamicAgentEnabled ? "on" : "off"}`,
+      );
     }
     for (const check of accountReport.checks) {
       console.log(`${check.ok ? "OK " : "FAIL"} ${check.name} :: ${check.detail}`);
@@ -934,6 +958,7 @@ async function main() {
   const finalReport = {
     args,
     configPath,
+    config,
     accounts: accountReports,
     summary: summarizeAccounts(accountReports),
   };

@@ -125,7 +125,7 @@ export async function executeWecomBotInboundFlow(payload = {}) {
     }
     state.commandBody = groupGuardResult.commandBody;
 
-    const commandGuardResult = applyWecomBotCommandAndSenderGuard({
+    const commandGuardResult = await applyWecomBotCommandAndSenderGuard({
       api,
       accountId: state.accountId,
       fromUser,

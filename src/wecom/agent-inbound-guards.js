@@ -1,3 +1,8 @@
+import {
+  issueWecomPairingChallenge,
+  resolveWecomDirectMessageAccess,
+} from "./pairing.js";
+
 function assertFunction(name, value) {
   if (typeof value !== "function") {
     throw new Error(`agent-inbound-guards: ${name} is required`);
@@ -61,28 +66,46 @@ export async function applyWecomAgentInboundGuards({
 
   const commandPolicy = resolveWecomCommandPolicy(api);
   const isAdminUser = commandPolicy.adminUsers.includes(normalizedFromUser);
-  const dmPolicy = resolveWecomDmPolicy(api, config?.accountId || accountId || "default", config);
+  const resolvedAccountId = config?.accountId || accountId || "default";
+  const dmPolicy = resolveWecomDmPolicy(api, resolvedAccountId, config);
+  const allowFromPolicy = resolveWecomAllowFromPolicy(api, resolvedAccountId, config);
+
   if (!isGroupChat) {
-    if (dmPolicy.mode === "deny") {
-      await sendTextToUser(dmPolicy.rejectMessage || "当前渠道私聊已关闭，请联系管理员。");
+    const dmAccess = await resolveWecomDirectMessageAccess({
+      api,
+      accountId: resolvedAccountId,
+      dmPolicy,
+      allowFromPolicy,
+      normalizedFromUser,
+      isAdminUser,
+      isWecomSenderAllowed,
+    });
+    if (dmAccess.decision === "pairing") {
+      const pairing = await issueWecomPairingChallenge({
+        api,
+        accountId: resolvedAccountId,
+        fromUser,
+        normalizedFromUser,
+        sendPairingReply: sendTextToUser,
+      });
+      if (!pairing.created && pairing.unsupported) {
+        await sendTextToUser(dmPolicy.rejectMessage || "当前私聊需先完成配对审批。");
+      }
       return { ok: false, commandBody: nextCommandBody, isAdminUser };
     }
-    if (dmPolicy.mode === "allowlist") {
-      const dmSenderAllowed = isAdminUser || isWecomSenderAllowed({
-        senderId: normalizedFromUser,
-        allowFrom: dmPolicy.allowFrom,
-      });
-      if (!dmSenderAllowed) {
-        await sendTextToUser(dmPolicy.rejectMessage || "当前私聊账号未授权，请联系管理员。");
-        return { ok: false, commandBody: nextCommandBody, isAdminUser };
-      }
+    if (dmAccess.decision !== "allow") {
+      await sendTextToUser(dmAccess.rejectText || dmPolicy.rejectMessage || "当前私聊账号未授权，请联系管理员。");
+      return { ok: false, commandBody: nextCommandBody, isAdminUser };
     }
   }
-  const allowFromPolicy = resolveWecomAllowFromPolicy(api, config?.accountId || accountId || "default", config);
-  const senderAllowed = isAdminUser || isWecomSenderAllowed({
-    senderId: normalizedFromUser,
-    allowFrom: allowFromPolicy.allowFrom,
-  });
+
+  const senderAllowed =
+    isAdminUser ||
+    allowFromPolicy.allowFrom.includes("*") ||
+    isWecomSenderAllowed({
+      senderId: normalizedFromUser,
+      allowFrom: allowFromPolicy.allowFrom,
+    });
   if (!senderAllowed) {
     api?.logger?.warn?.(
       `wecom: sender blocked by allowFrom account=${config?.accountId || "default"} user=${normalizedFromUser}`,

@@ -98,6 +98,7 @@ export function createWecomCommandHandlers({
   async function handleStatusCommand({ api, fromUser, corpId, corpSecret, agentId, accountId, proxyUrl }) {
     const config = getWecomConfig(api, accountId);
     const accountIds = listWecomAccountIds(api);
+    const bindingsCount = Array.isArray(api?.config?.bindings) ? api.config.bindings.length : 0;
     const webhookTargetAliases = listWebhookTargetAliases(config);
     const voiceConfig = resolveWecomVoiceTranscriptionConfig(api);
     const voiceRuntimeInfo = await inspectWecomVoiceTranscriptionRuntime({ api, voiceConfig });
@@ -134,6 +135,7 @@ export function createWecomCommandHandlers({
       webhookBotPolicy,
       dynamicAgentPolicy,
       observabilityMetrics,
+      bindingsCount,
     });
 
     await sendWecomText({
@@ -150,6 +152,8 @@ export function createWecomCommandHandlers({
 
   function buildBotStatus(api, fromUser) {
     const allWebhookTargetAliases = listAllWebhookTargetAliases(api);
+    const config = getWecomConfig(api, "default");
+    const bindingsCount = Array.isArray(api?.config?.bindings) ? api.config.bindings.length : 0;
     const commandPolicy = resolveWecomCommandPolicy(api);
     const allowFromPolicy = resolveWecomAllowFromPolicy(api, "default", {});
     const dmPolicy = resolveWecomDmPolicy(api, "default", {});
@@ -176,6 +180,8 @@ export function createWecomCommandHandlers({
       webhookBotPolicy,
       dynamicAgentPolicy,
       observabilityMetrics,
+      config,
+      bindingsCount,
     });
   }
 
